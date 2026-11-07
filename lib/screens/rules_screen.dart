@@ -4,6 +4,7 @@ import '../models/webhook_rule.dart';
 import '../services/app_localizations.dart';
 import '../services/native_bridge.dart';
 import 'rule_editor_screen.dart';
+import 'blacklist_manager_sheet.dart';
 
 class RulesScreen extends StatefulWidget {
   const RulesScreen({super.key});
@@ -178,6 +179,11 @@ class _RulesScreenState extends State<RulesScreen> {
       appBar: AppBar(
         title: Text(i18n.rulesTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         actions: [
+          IconButton(
+            tooltip: i18n.btnManageBlacklist,
+            icon: const Icon(Icons.block_outlined, color: Colors.deepOrange),
+            onPressed: () => BlacklistManagerSheet.show(context),
+          ),
           IconButton(
             tooltip: i18n.btnExportConfig,
             icon: const Icon(Icons.copy_all),

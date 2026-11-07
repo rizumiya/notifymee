@@ -333,6 +333,18 @@ class I18n {
   String get blacklistTitle => isId ? 'Daftar Blacklist / Pengecualian Kata Kunci' : 'Blacklist / Exclude Keywords';
   String get noBlacklistItems => isId ? 'Belum ada teks yang diblacklist untuk aplikasi ini.' : 'No blacklisted patterns for this app yet.';
   String get btnManageBlacklist => isId ? 'Kelola Blacklist' : 'Manage Blacklist';
+  String get blacklistNoticeDesc => isId
+      ? 'Notifikasi dengan kata kunci ini akan otomatis diabaikan (tidak dikirim ke webhook).'
+      : 'Future notifications matching this text pattern will be automatically skipped.';
+  String get blacklistAllAppsTitle => isId ? 'Daftar Blacklist Kata Kunci' : 'Keyword Blacklist';
+  String get blacklistAllAppsSubtitle => isId
+      ? 'Notifikasi dari aplikasi berikut yang cocok dengan pola kata kunci akan otomatis diabaikan.'
+      : 'Notifications from these apps matching the pattern will be ignored.';
+  String get blacklistEmptyTotal => isId
+      ? 'Belum ada kata kunci yang diblacklist.\n\nTips: Buka riwayat Log -> ketuk log notifikasi status (seperti "Memeriksa pesan baru") -> ketuk tombol "Blacklist / Exclude Notifikasi Serupa".'
+      : 'No keywords blacklisted yet.\n\nTip: Open Logs -> tap a status log (e.g. "Checking for new messages") -> tap "Blacklist / Exclude Similar Notifications".';
+  String get confirmDeleteBlacklist => isId ? 'Hapus pola blacklist ini?' : 'Delete this blacklist pattern?';
+  String get btnAddNewBlacklist => isId ? 'Tambah Blacklist Manual' : 'Add Manual Blacklist';
 
   // Background Architecture & Lock App Guide
   String get guideArchComparisonTitle => isId

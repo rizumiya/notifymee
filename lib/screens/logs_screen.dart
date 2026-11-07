@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/notification_log.dart';
 import '../services/app_localizations.dart';
 import '../services/native_bridge.dart';
+import 'blacklist_manager_sheet.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -107,6 +108,11 @@ class _LogsScreenState extends State<LogsScreen> {
       appBar: AppBar(
         title: Text(i18n.logsTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         actions: [
+          IconButton(
+            tooltip: i18n.btnManageBlacklist,
+            icon: const Icon(Icons.block_outlined, color: Colors.deepOrange),
+            onPressed: () => BlacklistManagerSheet.show(context),
+          ),
           IconButton(
             tooltip: i18n.btnRefresh,
             icon: const Icon(Icons.refresh),
@@ -372,6 +378,7 @@ class LogDetailSheet extends StatefulWidget {
 class _LogDetailSheetState extends State<LogDetailSheet> {
   bool _isRetrying = false;
   String? _retryResult;
+  String? _blacklistFeedback;
 
   Future<void> _retryWebhook() async {
     final webhookUrl = widget.log.webhookUrl;
@@ -461,17 +468,14 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
             onPressed: () async {
               final pattern = controller.text.trim();
               if (pattern.isNotEmpty) {
-                await NativeBridge().addPackageBlacklist(widget.log.packageName, pattern);
+                final ok = await NativeBridge().addPackageBlacklist(widget.log.packageName, pattern);
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
                 }
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: Colors.teal.shade800,
-                      content: Text(i18n.blacklistSuccess),
-                    ),
-                  );
+                if (mounted && ok) {
+                  setState(() {
+                    _blacklistFeedback = '${i18n.blacklistSuccess}\n"$pattern"';
+                  });
                   widget.onRefreshLogs();
                 }
               }
@@ -612,8 +616,71 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                       icon: const Icon(Icons.block, size: 16),
                       label: Text(i18n.btnBlacklistThis),
                     ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        BlacklistManagerSheet.show(context, initialPackageFilter: log.packageName);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blueGrey.shade700,
+                        side: BorderSide(color: Colors.blueGrey.shade300),
+                      ),
+                      icon: const Icon(Icons.list_alt, size: 16),
+                      label: Text(i18n.btnManageBlacklist),
+                    ),
                   ],
                 ),
+                if (_blacklistFeedback != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.teal.shade300, width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle, size: 20, color: Colors.teal.shade800),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _blacklistFeedback!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.teal.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          i18n.blacklistNoticeDesc,
+                          style: TextStyle(fontSize: 11, color: Colors.teal.shade800),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              foregroundColor: Colors.teal.shade900,
+                            ),
+                            icon: const Icon(Icons.list_alt, size: 16),
+                            label: Text(i18n.btnManageBlacklist, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () {
+                              BlacklistManagerSheet.show(context, initialPackageFilter: log.packageName);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (_retryResult != null) ...[
                   const SizedBox(height: 6),
                   Text(
