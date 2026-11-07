@@ -23,12 +23,26 @@ class BlacklistManagerSheet extends StatefulWidget {
 class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
   final NativeBridge _bridge = NativeBridge();
   bool _isLoading = true;
-  List<Map<String, dynamic>> _items = [];
+  List<Map<String, dynamic>> _allItems = [];
+  String? _activeFilter;
 
   @override
   void initState() {
     super.initState();
+    _activeFilter = widget.initialPackageFilter;
     _loadBlacklist();
+  }
+
+  String _getItemPackage(Map<String, dynamic> item) {
+    return item['packageName']?.toString() ?? item['package_name']?.toString() ?? '';
+  }
+
+  String _getItemPattern(Map<String, dynamic> item) {
+    return item['pattern']?.toString() ?? '';
+  }
+
+  String _getItemId(Map<String, dynamic> item) {
+    return item['id']?.toString() ?? '';
   }
 
   Future<void> _loadBlacklist() async {
@@ -36,11 +50,7 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
     final all = await _bridge.getAllBlacklist();
     if (mounted) {
       setState(() {
-        if (widget.initialPackageFilter != null && widget.initialPackageFilter!.isNotEmpty) {
-          _items = all.where((item) => item['package_name'] == widget.initialPackageFilter).toList();
-        } else {
-          _items = all;
-        }
+        _allItems = all;
         _isLoading = false;
       });
     }
@@ -48,14 +58,15 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
     final i18n = I18n.of(context);
-    final id = item['id']?.toString() ?? '';
-    final pattern = item['pattern']?.toString() ?? '';
+    final id = _getItemId(item);
+    final pattern = _getItemPattern(item);
+    final pkg = _getItemPackage(item);
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(i18n.confirmDeleteBlacklist),
-        content: Text('"$pattern" (${item['package_name']})'),
+        content: Text('"$pattern"\n($pkg)'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(i18n.btnCancel)),
           FilledButton(
@@ -85,7 +96,7 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
 
   Future<void> _showAddManualDialog() async {
     final i18n = I18n.of(context);
-    final pkgController = TextEditingController(text: widget.initialPackageFilter ?? '');
+    final pkgController = TextEditingController(text: _activeFilter ?? '');
     final patternController = TextEditingController();
 
     showDialog(
@@ -140,11 +151,17 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
   Widget build(BuildContext context) {
     final i18n = I18n.of(context);
 
+    // Apply active filter if specified
+    final displayedItems = _activeFilter != null && _activeFilter!.isNotEmpty
+        ? _allItems.where((item) => _getItemPackage(item) == _activeFilter).toList()
+        : _allItems;
+
     // Group items by package_name
     final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (final item in _items) {
-      final pkg = item['package_name']?.toString() ?? 'unknown';
-      grouped.putIfAbsent(pkg, () => []).add(item);
+    for (final item in displayedItems) {
+      final pkg = _getItemPackage(item);
+      final key = pkg.isNotEmpty ? pkg : 'Aplikasi Lainnya';
+      grouped.putIfAbsent(key, () => []).add(item);
     }
 
     return Container(
@@ -193,11 +210,41 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
             ),
           ),
 
+          // Active filter banner (if filtering by package)
+          if (_activeFilter != null && _activeFilter!.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.deepOrange.shade50,
+              child: Row(
+                children: [
+                  const Icon(Icons.filter_alt, size: 16, color: Colors.deepOrange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Menampilkan untuk: $_activeFilter',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepOrange.shade900,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _activeFilter = null);
+                    },
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    child: const Text('Tampilkan Semua', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+              ),
+            ),
+
           // Content
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
+                : displayedItems.isEmpty
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(32),
@@ -207,16 +254,25 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
                               Icon(Icons.filter_list_off, size: 56, color: Colors.grey.shade400),
                               const SizedBox(height: 16),
                               Text(
-                                i18n.blacklistEmptyTotal,
+                                _activeFilter != null
+                                    ? 'Belum ada kata kunci yang diblacklist untuk $_activeFilter.'
+                                    : i18n.blacklistEmptyTotal,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(fontSize: 13, height: 1.45, color: Colors.grey.shade700),
                               ),
-                              const SizedBox(height: 20),
-                              OutlinedButton.icon(
-                                onPressed: _showAddManualDialog,
-                                icon: const Icon(Icons.add, size: 16),
-                                label: Text(i18n.btnAddNewBlacklist),
-                              ),
+                              const SizedBox(height: 16),
+                              if (_activeFilter != null)
+                                FilledButton.icon(
+                                  onPressed: () => setState(() => _activeFilter = null),
+                                  icon: const Icon(Icons.apps, size: 16),
+                                  label: const Text('Tampilkan Semua Aplikasi'),
+                                )
+                              else
+                                OutlinedButton.icon(
+                                  onPressed: _showAddManualDialog,
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: Text(i18n.btnAddNewBlacklist),
+                                ),
                             ],
                           ),
                         ),
@@ -267,12 +323,17 @@ class _BlacklistManagerSheetState extends State<BlacklistManagerSheet> {
                                   const SizedBox(height: 10),
                                   const Divider(height: 1),
                                   ...pkgItems.map((item) {
-                                    final pattern = item['pattern']?.toString() ?? '';
-                                    final createdAt = item['created_at'];
+                                    final pattern = _getItemPattern(item);
+                                    final createdRaw = item['createdAt'] ?? item['created_at'];
                                     String dateStr = '';
-                                    if (createdAt != null) {
-                                      final dt = DateTime.fromMillisecondsSinceEpoch((createdAt as num).toInt());
-                                      dateStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} - ${dt.day}/${dt.month}';
+                                    if (createdRaw != null) {
+                                      final ts = (createdRaw is num)
+                                          ? createdRaw.toInt()
+                                          : int.tryParse(createdRaw.toString()) ?? 0;
+                                      if (ts > 0) {
+                                        final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+                                        dateStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} - ${dt.day}/${dt.month}/${dt.year}';
+                                      }
                                     }
 
                                     return Padding(

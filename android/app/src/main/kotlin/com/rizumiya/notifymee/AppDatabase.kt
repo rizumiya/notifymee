@@ -458,12 +458,18 @@ class AppDatabase private constructor(private val context: Context) :
         )
         val list = mutableListOf<Map<String, String>>()
         while (cursor.moveToNext()) {
+            val id = cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_ID)) ?: ""
+            val pkg = cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PACKAGE)) ?: ""
+            val pat = cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PATTERN)) ?: ""
+            val created = cursor.getLong(cursor.getColumnIndexOrThrow(COL_BL_CREATED_AT)).toString()
             list.add(
                 mapOf(
-                    "id" to (cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_ID)) ?: ""),
-                    "packageName" to (cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PACKAGE)) ?: ""),
-                    "pattern" to (cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PATTERN)) ?: ""),
-                    "createdAt" to cursor.getLong(cursor.getColumnIndexOrThrow(COL_BL_CREATED_AT)).toString()
+                    "id" to id,
+                    "packageName" to pkg,
+                    "package_name" to pkg,
+                    "pattern" to pat,
+                    "createdAt" to created,
+                    "created_at" to created
                 )
             )
         }
@@ -477,12 +483,18 @@ class AppDatabase private constructor(private val context: Context) :
         val cursor = db.rawQuery("SELECT * FROM $TABLE_BLACKLIST ORDER BY $COL_BL_CREATED_AT DESC", null)
         val list = mutableListOf<Map<String, String>>()
         while (cursor.moveToNext()) {
+            val id = cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_ID)) ?: ""
+            val pkg = cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PACKAGE)) ?: ""
+            val pat = cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PATTERN)) ?: ""
+            val created = cursor.getLong(cursor.getColumnIndexOrThrow(COL_BL_CREATED_AT)).toString()
             list.add(
                 mapOf(
-                    "id" to (cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_ID)) ?: ""),
-                    "packageName" to (cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PACKAGE)) ?: ""),
-                    "pattern" to (cursor.getString(cursor.getColumnIndexOrThrow(COL_BL_PATTERN)) ?: ""),
-                    "createdAt" to cursor.getLong(cursor.getColumnIndexOrThrow(COL_BL_CREATED_AT)).toString()
+                    "id" to id,
+                    "packageName" to pkg,
+                    "package_name" to pkg,
+                    "pattern" to pat,
+                    "createdAt" to created,
+                    "created_at" to created
                 )
             )
         }
