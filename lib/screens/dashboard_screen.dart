@@ -159,6 +159,82 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     }
   }
 
+  Future<void> _showCustomSimulationDialog() async {
+    final i18n = I18n.of(context);
+    final pkgController = TextEditingController(text: 'com.whatsapp');
+    final titleController = TextEditingController(text: 'Budi Santoso');
+    final textController = TextEditingController(text: i18n.isId ? 'Halo, ini uji notifikasi kustom gateway.' : 'Hello, this is a custom gateway simulation notification.');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.tune, color: Colors.teal),
+            const SizedBox(width: 8),
+            Text(i18n.customSimTitle, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: pkgController,
+                decoration: InputDecoration(
+                  labelText: i18n.customSimPkgLabel,
+                  hintText: 'e.g. com.whatsapp',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: i18n.customSimTitleLabel,
+                  hintText: 'e.g. Budi Santoso',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: i18n.customSimBodyLabel,
+                  hintText: i18n.isId ? 'Teks pesan notifikasi...' : 'Notification message content...',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(i18n.btnCancel),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              final pkg = pkgController.text.trim();
+              final title = titleController.text.trim();
+              final text = textController.text.trim();
+              if (pkg.isNotEmpty && text.isNotEmpty) {
+                Navigator.pop(ctx);
+                _runQuickSimulation(pkg, title, text);
+              }
+            },
+            icon: const Icon(Icons.send, size: 16),
+            label: Text(i18n.btnSendSim),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final i18n = I18n.of(context);
@@ -527,7 +603,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                               ),
                               const Spacer(),
                               TextButton.icon(
-                                onPressed: () => widget.onNavigateTab(2),
+                                onPressed: _showCustomSimulationDialog,
                                 icon: const Icon(Icons.tune, size: 16),
                                 label: Text(i18n.customAction),
                               ),
@@ -651,7 +727,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                     ),
                     TextButton(
-                      onPressed: () => widget.onNavigateTab(2),
+                      onPressed: () => widget.onNavigateTab(3),
                       child: Text(i18n.btnViewAll),
                     ),
                   ],

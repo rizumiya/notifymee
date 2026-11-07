@@ -4,7 +4,7 @@ import '../models/webhook_rule.dart';
 
 class AppLocaleNotifier extends ChangeNotifier {
   static const String _prefKey = 'selected_language';
-  Locale _locale = const Locale('id');
+  Locale _locale = const Locale('en');
 
   Locale get locale => _locale;
   bool get isIndonesian => _locale.languageCode == 'id';
@@ -16,7 +16,7 @@ class AppLocaleNotifier extends ChangeNotifier {
   Future<void> _loadSavedLocale() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final lang = prefs.getString(_prefKey) ?? 'id';
+      final lang = prefs.getString(_prefKey) ?? 'en';
       _locale = Locale(lang);
       notifyListeners();
     } catch (_) {}
@@ -102,6 +102,11 @@ class I18n {
   String get rebindFailed => isId ? 'Gagal merebind listener.' : 'Failed to rebind listener.';
   String get simSuccess => isId ? 'Simulasi diproses! Periksa tab Log Webhook.' : 'Simulation processed! Check Logs tab.';
   String get simFailed => isId ? 'Gagal menjalankan simulasi.' : 'Failed to run simulation.';
+  String get customSimTitle => isId ? 'Simulasi Notifikasi Kustom' : 'Custom Notification Simulation';
+  String get customSimPkgLabel => isId ? 'Nama Paket (Package Name)' : 'Package Name';
+  String get customSimTitleLabel => isId ? 'Judul Notifikasi' : 'Notification Title';
+  String get customSimBodyLabel => isId ? 'Isi Pesan Notifikasi' : 'Notification Message Body';
+  String get btnSendSim => isId ? 'Kirim Simulasi' : 'Send Simulation';
 
   // Rules Screen
   String get rulesTitle => isId ? 'Daftar Aturan Webhook' : 'Webhook Rules List';

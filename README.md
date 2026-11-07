@@ -1,116 +1,112 @@
-# 🚀 Notifymee (NotifyMe) — Android Notification Gateway to Webhooks
+# 🚀 Notifymee — Android Notification Gateway to Webhooks
+
+<div align="center">
+  <p>
+    <b>🇬🇧 English</b> &nbsp;|&nbsp; <a href="README.id.md">🇮🇩 Bahasa Indonesia</a>
+  </p>
+</div>
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Android](https://img.shields.io/badge/Android-10%2B%20%7C%2014%2B%20%7C%20HyperOS-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
-[![Status: Production Ready](https://img.shields.io/badge/Status-Persistent%2024%2F7-brightgreen.svg)](#arsitektur-tahan-banting-persistent)
+[![Status: Production Ready](https://img.shields.io/badge/Status-Persistent%2024%2F7-brightgreen.svg)](#persistent-background-architecture)
 
-**Notifymee** adalah gateway notifikasi Android modern dan berkinerja tinggi yang menangkap notifikasi perangkat secara *real-time* dan meneruskannya ke *webhook server*, n8n, Zapier, Make, Telegram bot, atau REST API backend kustom Anda.
+**Notifymee** is a resilient, modern Android notification gateway that captures incoming device notifications in real time and forwards them to your target webhook servers, n8n, Zapier, Make, Telegram bots, or custom backend APIs.
 
-Dibangun dengan arsitektur **Pure Native Interception (Kotlin)** dan antarmuka manajemen modern berbasis **Flutter Material 3**, Notifymee dirancang agar **tahan banting (persistent)** dan tetap beroperasi di latar belakang bahkan saat aplikasi ditutup atau dibersihkan dari layar *Recent Apps*.
+Built with a **Pure Native Interception (Kotlin)** architecture paired with a slick **Flutter Material 3** management UI, Notifymee is engineered to stay persistently active 24/7 in the background—even after the app is cleared or swiped away from the Recent Apps screen.
 
 ---
 
-## 📸 Tampilan Antarmuka (Screenshots)
+## 📸 App Screenshots
 
 <div align="center">
   <table>
     <tr>
-      <td align="center"><b>Dashboard & Status Gateway</b></td>
-      <td align="center"><b>Aturan & Editor Webhook Baru</b></td>
-      <td align="center"><b>Menu Khusus Blacklist & Export/Import</b></td>
+      <th width="33.3%" align="center">Dashboard & Gateway Status</th>
+      <th width="33.3%" align="center">Rules & Webhook Editor</th>
+      <th width="33.3%" align="center">Keyword Blacklist & Anti-Spam</th>
     </tr>
     <tr>
-      <td><img src="docs/screenshots/dashboard.png" width="280" alt="Dashboard Screen"/></td>
-      <td><img src="docs/screenshots/rules.png" width="280" alt="Rules & Editor Screen"/></td>
-      <td><img src="docs/screenshots/blacklist.png" width="280" alt="Blacklist Screen"/></td>
+      <td align="center"><img src="docs/screenshots/dashboard.png" width="240" alt="Dashboard Screen"/></td>
+      <td align="center"><img src="docs/screenshots/rules.png" width="240" alt="Rules Screen"/></td>
+      <td align="center"><img src="docs/screenshots/blacklist.png" width="240" alt="Blacklist Screen"/></td>
+    </tr>
+  </table>
+
+  <table>
+    <tr>
+      <th width="50%" align="center">Dispatch Logs & Manual Retry</th>
+      <th width="50%" align="center">Setup Guide & OEM Resilience</th>
     </tr>
     <tr>
-      <td align="center"><b>Riwayat Log & Retry Manual</b></td>
-      <td align="center"><b>Panduan Setup & OEM Resilience</b></td>
-      <td align="center"><b>Koleksi Preset Siap Import</b></td>
-    </tr>
-    <tr>
-      <td><img src="docs/screenshots/logs.png" width="280" alt="Logs Screen"/></td>
-      <td><img src="docs/screenshots/guide.png" width="280" alt="Guide Screen"/></td>
-      <td align="left">
-        📂 <b>Folder <a href="presets/"><code>/presets/</code></a></b>:<br/><br/>
-        • <code>whatsapp_chat_dan_antispam.json</code><br/>
-        • <code>mutasi_qris_dana_bca_gopay.json</code><br/>
-        • <code>otp_verifikasi_universal.json</code><br/>
-        • <code>telegram_bot_gateway.json</code>
-      </td>
+      <td align="center"><img src="docs/screenshots/logs.png" width="240" alt="Logs Screen"/></td>
+      <td align="center"><img src="docs/screenshots/guide.png" width="240" alt="Guide Screen"/></td>
     </tr>
   </table>
 </div>
 
+### 📂 Ready-to-Use Config Presets ([`/presets/`](presets/))
+Pre-configured JSON rule & blacklist bundles ready for 1-click import:
+- 💬 [**`whatsapp_chat_dan_antispam.json`**](presets/whatsapp_chat_dan_antispam.json) — WhatsApp chat forwarding with auto-blacklist for system status notifications (*"Checking for new messages"*, *"Backing up chats"*, etc.).
+- 💳 [**`mutasi_qris_dana_bca_gopay.json`**](presets/mutasi_qris_dana_bca_gopay.json) — Bank & e-wallet transaction parser with transfer amount regex extraction.
+- 🔑 [**`otp_verifikasi_universal.json`**](presets/otp_verifikasi_universal.json) — Universal regex rule to catch 4–8 digit OTP codes from SMS & banking apps.
+- 🤖 [**`telegram_bot_gateway.json`**](presets/telegram_bot_gateway.json) — Direct webhook forwarding configured for Telegram Bot APIs.
+
 ---
 
-## ⚡ Fitur Utama (Core Features)
+## ⚡ Core Features
 
-- 🔒 **Arsitektur Pure Native (Kotlin) Tahan Banting**: Logika penerimaan notifikasi (`NotificationListenerService`), pencocokan filter, dan pengiriman HTTP POST berjalan 100% di sisi Native Android (Kotlin). Webhook tetap terkirim meskipun UI utama ditutup.
-- 🎯 **Rule Engine & Regex Filter**:
-  - Filter berdasarkan aplikasi (`package_name`) atau semua aplikasi (`*`).
-  - Filter teks menggunakan pola RegEx fleksibel dengan *Named Capture Groups* (`(?<nama>...)`) & *Numbered Groups*.
-  - Ekstraksi otomatis token OTP, nominal transfer bank/QRIS, status order, dan pesan sensitif.
-- 🚫 **Menu Khusus Per-Package Keyword Blacklist**:
-  - Tab navigasi tersendiri (**Blacklist**) untuk mengelola kata kunci pengecualian per aplikasi maupun global (`*`) tanpa harus masuk ke menu Log terlebih dahulu.
-  - Dilengkapi **Template Filter Spam 1-Ketuk** (seperti *"Memeriksa pesan baru"*, *"WhatsApp Web sedang aktif"*, *"Mencadangkan pesan"*).
-- 📦 **Export & Import Pengaturan Package (Custom Filename + Koleksi `/presets/`)**:
-  - Ekspor aturan webhook sekaligus daftar blacklist per aplikasi ke file `.json` dengan **nama file kustom** sesuai keinginan Anda.
-  - Tersedia koleksi konfigurasi siap pakai di folder [`/presets/`](presets/) yang dapat langsung diimpor ke aplikasi.
+- 🔒 **Persistent Pure Native (Kotlin) Architecture**:
+  Notification listening (`NotificationListenerService`), filter matching, SQLite caching, and HTTP POST dispatching run 100% in Native Android (Kotlin). Webhooks continue firing without delay even when Flutter UI activities are killed.
+- 🎯 **Rule Engine with Flexible RegEx**:
+  - Filter by specific application package name (`com.whatsapp`, `com.bank.bca`) or wildcards (`*`).
+  - Powerful RegEx support with *Named Capture Groups* (`(?<amount>...)`) and indexed capture groups forwarded directly in the JSON payload.
+  - Automatically extracts OTP codes, bank mutation balances, order numbers, and transaction IDs.
+- 🚫 **Dedicated Keyword Blacklist & Anti-Spam Manager**:
+  - Independent navigation tab for keyword exclusions per-package or globally (`*`).
+  - **1-Tap Spam Filter Templates** to instantly ignore transient system popups (*"Checking for new messages"*, *"WhatsApp Web active"*, etc.).
+- 📦 **Export & Import Package Configurations (Custom File Names)**:
+  - Backup rules and blacklists together as a unified bundle `.json` with customizable filenames.
+  - Share and import pre-built setups across multiple devices seamlessly.
 - 💬 **WhatsApp Multi-Message Auto-Extractor**:
-  - Secara cerdas membedah tumpukan notifikasi pesan WhatsApp (`MessagingStyle`) menjadi entri obrolan individual, lengkap dengan pencegah duplikasi (*Deduplication Cache*).
-- 🔄 **Auto-Rebind & Keep-Alive Engine**:
-  - Implementasi `onTaskRemoved` dan `onDestroy` dengan `requestRebind(ComponentName)`.
-  - Terintegrasi dengan Foreground Service (`START_STICKY`), `PARTIAL_WAKE_LOCK` saat layar mati (*Doze Mode*), dan `FOREGROUND_SERVICE_SPECIAL_USE` (Android 14+ / HyperOS).
-  - Fitur **Tekan Kembali 2x untuk Keluar** agar aplikasi tidak tertutup secara tidak sengaja.
-- 💾 **Penyimpanan Offline SQLite Terbuka (WAL Mode)**:
-  - Aturan filter, riwayat pengiriman, payload JSON, dan blacklist disimpan di SQLite lokal (`WRITE_AHEAD_LOGGING`) yang aman diakses bersamaan oleh UI dan Background Service.
-- 🌐 **Bilingual (Indonesian & English)**:
-  - Tersedia tombol cepat ganti bahasa langsung di AppBar tanpa harus membuka pengaturan perangkat.
+  - Intelligently parses bundled `MessagingStyle` group notifications into individual chat events with an in-memory *Deduplication Cache*.
+- 🔄 **Keep-Alive & Auto-Rebind Engine**:
+  - Implements `onTaskRemoved` and `onDestroy` lifecycle handlers that call `requestRebind(ComponentName)` to ensure the system listener immediately reconnects if dismissed.
+  - Coupled with a sticky Foreground Service (`START_STICKY`), `PARTIAL_WAKE_LOCK` for deep sleep (*Doze Mode*), and Android 14+ / HyperOS compliance (`FOREGROUND_SERVICE_SPECIAL_USE`).
+  - **Double-back-to-exit** confirmation prevents accidental closure of the UI.
+- 💾 **Local Offline SQLite Database (WAL Mode)**:
+  - Rules, dispatch logs, payloads, and blacklists are persisted safely in SQLite with Write-Ahead Logging (`WAL`), allowing concurrent access from native background threads and Flutter UI.
+- 🌐 **Bilingual (English & Indonesian)**:
+  - Built-in dynamic language switcher in the AppBar without requiring app restarts.
 
 ---
 
-## 📂 Koleksi Preset Siap Import (`/presets/`)
-
-Repositori ini menyediakan kumpulan file konfigurasi JSON siap pakai di dalam folder [`/presets/`](presets/) yang menggabungkan **Aturan Webhook** dan **Blacklist Kata Kunci**:
-
-| Nama File Preset | Target Package | Kegunaan Utama |
-| :--- | :--- | :--- |
-| [`whatsapp_chat_dan_antispam.json`](presets/whatsapp_chat_dan_antispam.json) | `com.whatsapp` | Meneruskan chat masuk WhatsApp + otomatis memblokir spam sistem (*"Memeriksa pesan baru"*, *"Mencadangkan pesan"*, *"WhatsApp Web sedang aktif"*). |
-| [`mutasi_qris_dana_bca_gopay.json`](presets/mutasi_qris_dana_bca_gopay.json) | `id.dana, com.bca, com.gojek.app, ...` | Mengekstrak nominal Rupiah (`Rp ...`) dari notifikasi pembayaran QRIS, e-Wallet, dan mobile banking. |
-| [`otp_verifikasi_universal.json`](presets/otp_verifikasi_universal.json) | `*` (Semua Aplikasi) | Mendeteksi & mengekstrak kode OTP 4–8 digit secara otomatis ke variabel `{{group1}}`. |
-| [`telegram_bot_gateway.json`](presets/telegram_bot_gateway.json) | `org.telegram.messenger` | Meneruskan pesan notifikasi masuk menjadi pesan chat langsung ke Bot Telegram (`api.telegram.org`). |
-
----
-
-## 🏗️ Diagram Arsitektur Sistem
+## 🏗️ Architecture & Data Flow
 
 ```mermaid
 flowchart TD
-    subgraph AndroidOS["Android OS / HyperOS Framework"]
-        NM["NotificationManager (WA, Bank, SMS)"]
-        NLS["NotificationListenerService Binder"]
+    subgraph AndroidOS["Android System Layer"]
+        NM["Android Notification Manager"]
+        NLS["NotificationListenerService<br/>(com.rizumiya.notifymee.NotificationService)"]
+        FGS["Foreground Service & WakeLock<br/>(Status Bar Keep-Alive Anchor)"]
     end
 
-    subgraph NativeService["Notifymee Native Layer (Pure Kotlin)"]
-        SRV["NotificationService (START_STICKY)"]
-        FGS["Foreground Service (Ongoing Status)"]
-        DEDUP["Deduplication Cache (30s)"]
-        DB[("Local SQLite Database\n(Rules, Logs, Blacklist)")]
-        MATCHER["Rule Engine & Blacklist Filter"]
-        HTTP["Async HTTP Dispatcher (HttpURLConnection)"]
+    subgraph NativeKotlin["Native Background Layer (Pure Kotlin)"]
+        SRV["NotificationService Worker"]
+        DEDUP["Deduplication Cache & Key Hasher"]
+        DB[("Local SQLite Database<br/>(WAL Mode: Rules, Logs, Blacklist)")]
+        MATCHER["Rule Engine & Regex Matcher"]
+        HTTP["WebhookDispatcher (HttpURLConnection)"]
     end
 
-    subgraph External["External Webhooks & Automation"]
-        N8N["n8n Workflow / Automations"]
-        API["Custom REST API (Node/PHP/Python)"]
+    subgraph ExternalWebhooks["External Targets"]
+        N8N["n8n / Node-RED"]
+        API["Custom REST API Server"]
         TG["Telegram / Discord Bot"]
     end
 
-    subgraph FlutterUI["UI Layer (Management)"]
+    subgraph FlutterUI["UI Layer (Management & Monitoring)"]
         DASH["Dashboard & Live Metrics"]
         RULES_UI["Rule & Regex Editor"]
         BL_UI["Dedicated Blacklist Manager"]
@@ -133,9 +129,9 @@ flowchart TD
 
 ---
 
-## 📡 Format Payload JSON Universal
+## 📡 Universal JSON Payload Format
 
-Setiap notifikasi yang cocok dengan aturan akan dikirimkan ke URL Webhook target dengan *HTTP POST (application/json)*:
+Every notification that matches an active rule is delivered to the configured Webhook URL via *HTTP POST (application/json)*:
 
 ```json
 {
@@ -148,23 +144,23 @@ Setiap notifikasi yang cocok dengan aturan akan dikirimkan ke URL Webhook target
   },
   "notification": {
     "title": "Budi Santoso",
-    "text": "Halo, transfer sudah dikirim ya!",
-    "big_text": "Halo, transfer sudah dikirim ya! Cek mutasi Rp 500.000",
+    "text": "Payment sent! Reference ID: TRX-9921",
+    "big_text": "Payment sent! Reference ID: TRX-9921. Total: $500.00",
     "sub_text": "",
-    "full_content": "Budi Santoso Halo, transfer sudah dikirim ya!",
+    "full_content": "Budi Santoso Payment sent! Reference ID: TRX-9921",
     "is_group_summary": false
   },
   "rule": {
     "id": "rule_01_wa",
-    "name": "Penerus Notifikasi WhatsApp"
+    "name": "WhatsApp Forwarder"
   },
   "matches": {
     "has_regex": true,
-    "regex_pattern": "transfer.*?Rp\\s*(?<nominal>[\\d.]+)",
+    "regex_pattern": "Reference ID:\\s*(?<ref_id>[A-Z0-9-]+)",
     "groups": [
       {
-        "name": "nominal",
-        "value": "500.000"
+        "name": "ref_id",
+        "value": "TRX-9921"
       }
     ]
   }
@@ -173,20 +169,23 @@ Setiap notifikasi yang cocok dengan aturan akan dikirimkan ke URL Webhook target
 
 ---
 
-## 🛡️ Panduan Ketahanan Latar Belakang (OEM Resilience)
+## 🛡️ OEM Keep-Alive & Resilience Guide
 
-### Cara Menjaga Notifymee Berjalan 24/7 di Xiaomi / HyperOS / MIUI / Oppo / Vivo:
-1. **Izinkan Notifikasi Notifymee**: Jangan matikan notifikasi aplikasi Notifymee di Pengaturan HP. Jika tidak ingin notifikasi mengganggu bilah status, ubah ke **Hening / Senyap (Silent)**. Notifikasi ini adalah jangkar *Foreground Service* agar layanan gateway tidak ikut mati di latar belakang saat daftar aplikasi dibersihkan.
-2. **Kunci Notifymee di Layar Recent Apps**:
-   - Buka layar *Recent Apps* (multitasking).
-   - Tekan dan tahan (atau geser ke bawah) pada jendela kartu Notifymee.
-   - Ketuk ikon **Gembok (Lock 🔒)** agar Notifymee tidak ikut mati saat tombol *"Bersihkan Semua" (Clear All)* ditekan.
-3. **Mulai Otomatis (Autostart)**: Buka *Info Aplikasi* -> aktifkan *Mulai Otomatis (Autostart)*.
-4. **Penghemat Baterai**: Pilih **Tidak ada pembatasan (No restrictions)**.
+### How to keep Notifymee running 24/7 on Xiaomi / HyperOS / MIUI / Oppo / Vivo:
+1. **Keep Notifymee Notifications Enabled**:
+   Do not block Notifymee notifications in Android system settings. If you prefer not to see the ongoing banner, set it to **Silent / Non-intrusive**. This notification acts as the critical *Foreground Service Anchor* that prevents Android from reclaiming the gateway service during memory optimization.
+2. **Lock Notifymee in Recent Apps**:
+   - Open your device's **Recent Apps** (multitasking screen).
+   - Long-press (or swipe down) on the Notifymee window card.
+   - Tap the **Padlock icon (Lock 🔒)**. Notifymee is now exempt from the "Clear All" killer.
+3. **Autostart Permission**:
+   Go to *App Info* -> enable **Autostart**.
+4. **Battery Saver Settings**:
+   Set Battery Saver to **No Restrictions (Unrestricted)**.
 
 ---
 
-## 🛠️ Contoh Webhook Handler Server
+## 🛠️ Example Webhook Server Implementations
 
 ### 1. Node.js (Express)
 ```javascript
@@ -200,7 +199,7 @@ app.post('/webhook/notifications', (req, res) => {
   console.log(`[${sourceApp.app_name}] ${notification.title}: ${notification.text}`);
   
   if (matches.has_regex) {
-    console.log("Matched Groups:", matches.groups);
+    console.log("Matched Regex Groups:", matches.groups);
   }
 
   res.status(200).json({ status: 'ok', received_at: new Date().toISOString() });
@@ -252,34 +251,34 @@ if ($data) {
 
 ---
 
-## 📦 Cara Membangun dari Source Code
+## 📦 Building from Source
 
-### Prasyarat
+### Prerequisites
 - Flutter SDK 3.24+
 - Android SDK 34 / 35
 - Java 17
 
-### Perintah Build
+### Build Commands
 ```bash
-# Clone repository
+# Clone the repository
 git clone https://github.com/rizumiya/notifymee.git
 cd notifymee
 
-# Unduh dependencies Flutter
+# Fetch Flutter dependencies
 flutter pub get
 
-# Jalankan unit & widget tests
+# Run unit and widget tests
 flutter test
 
-# Build APK Debug (Khusus ARM64)
+# Build Debug APK (ARM64 optimized)
 flutter build apk --target-platform android-arm64 --debug
 
-# Install ke perangkat via ADB
+# Install to connected device via ADB
 adb install -r -d build/app/outputs/flutter-apk/app-debug.apk
 ```
 
 ---
 
-## 📄 Lisensi
+## 📄 License
 
-Proyek ini dirilis di bawah lisensi [MIT](LICENSE). Bebas digunakan, dimodifikasi, dan didistribusikan untuk keperluan pribadi maupun komersial.
+This project is licensed under the [MIT License](LICENSE). Feel free to use, modify, and distribute for personal and commercial purposes.
