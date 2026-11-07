@@ -1,0 +1,48 @@
+{
+  "format": "notifymee_package_bundle_v2",
+  "export_name": "whatsapp_chat_dan_antispam.json",
+  "description": "Aturan penerus pesan masuk WhatsApp dilengkapi filter Blacklist otomatis untuk notifikasi sistem/sinkronisasi WhatsApp.",
+  "package_filter": "com.whatsapp",
+  "exported_at": "2026-11-06T17:40:00Z",
+  "rules": [
+    {
+      "id": "preset_wa_chat_01",
+      "name": "Forwarder Pesan WhatsApp",
+      "isEnabled": true,
+      "packageFilter": "com.whatsapp",
+      "keywordRegex": "",
+      "ignoreCase": true,
+      "webhookUrl": "https://httpbin.org/post",
+      "httpMethod": "POST",
+      "secretKey": "",
+      "customTemplate": "",
+      "maxRetries": 3,
+      "ignoreGroupSummary": true,
+      "deduplicate": true,
+      "ignoreOngoing": true,
+      "cooldownSeconds": 0
+    }
+  ],
+  "blacklists": [
+    {
+      "packageName": "com.whatsapp",
+      "pattern": "Memeriksa pesan baru"
+    },
+    {
+      "packageName": "com.whatsapp",
+      "pattern": "Checking for new messages"
+    },
+    {
+      "packageName": "com.whatsapp",
+      "pattern": "WhatsApp Web sedang aktif"
+    },
+    {
+      "packageName": "com.whatsapp",
+      "pattern": "Mencadangkan pesan"
+    },
+    {
+      "packageName": "com.whatsapp",
+      "pattern": " Mencari pesan baru"
+    }
+  ]
+}

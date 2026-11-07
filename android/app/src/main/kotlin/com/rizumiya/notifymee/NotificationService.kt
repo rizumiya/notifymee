@@ -16,72 +16,112 @@ import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
 
 class NotificationService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "NotifWebhookService"
+
+        @Volatile
         var isServiceRunning = false
+
+        @Volatile
         var instance: NotificationService? = null
 
-        // Deduplication cache: key -> timestamp (ms) to avoid duplicate webhooks for the same message
-        private val recentNotifications = java.util.concurrent.ConcurrentHashMap<String, Long>()
-        private const val DEDUP_WINDOW_MS = 2500L
+        // In-memory fast deduplication cache: key -> timestamp (ms)
+        private val recentNotifications = ConcurrentHashMap<String, Long>()
+        private const val DEDUP_WINDOW_MS = 3000L
 
-        private fun isDuplicate(key: String): Boolean {
-            val now = System.currentTimeMillis()
-            // Clean up entries older than 30 seconds
-            val iterator = recentNotifications.entries.iterator()
-            while (iterator.hasNext()) {
-                val entry = iterator.next()
-                if (now - entry.value > 30000L) {
-                    iterator.remove()
-                }
-            }
-
-            val lastTime = recentNotifications[key]
-            if (lastTime != null && (now - lastTime) < DEDUP_WINDOW_MS) {
-                return true
-            }
-            recentNotifications[key] = now
-            return false
-        }
+        // Per-rule cooldown tracker: ruleId -> lastDispatchedTimestamp (ms)
+        private val ruleCooldownTracker = ConcurrentHashMap<String, Long>()
 
         private const val FOREGROUND_CHANNEL_ID = "notifymee_gateway_channel"
         private const val FOREGROUND_NOTIFICATION_ID = 9001
 
+        private fun isDuplicateInMemory(key: String, customWindowMs: Long = DEDUP_WINDOW_MS): Boolean {
+            val now = System.currentTimeMillis()
+            if (recentNotifications.size > 250) {
+                val iterator = recentNotifications.entries.iterator()
+                while (iterator.hasNext()) {
+                    val entry = iterator.next()
+                    if (now - entry.value > 60_000L) {
+                        iterator.remove()
+                    }
+                }
+            }
+
+            val prevTime = recentNotifications.put(key, now)
+            return prevTime != null && (now - prevTime) < customWindowMs
+        }
+
+        private fun isRuleInCooldown(ruleId: String, cooldownSeconds: Int): Boolean {
+            if (cooldownSeconds <= 0) return false
+            val now = System.currentTimeMillis()
+            val cooldownMs = cooldownSeconds * 1000L
+            val lastTime = ruleCooldownTracker[ruleId]
+            if (lastTime != null && (now - lastTime) < cooldownMs) {
+                return true
+            }
+            ruleCooldownTracker[ruleId] = now
+            return false
+        }
+
         fun startForegroundService(context: Context) {
             try {
-                val serviceIntent = Intent(context, NotificationService::class.java)
+                val appContext = context.applicationContext
+                val serviceIntent = Intent(appContext, NotificationService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(serviceIntent)
+                    appContext.startForegroundService(serviceIntent)
                 } else {
-                    context.startService(serviceIntent)
+                    appContext.startService(serviceIntent)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to startForegroundService: ${e.message}")
             }
         }
 
-        fun triggerRebind(context: Context) {
+        /**
+         * Requests system rebind safely WITHOUT disabling the component if the service is alive.
+         * Use this inside lifecycle callbacks (onTaskRemoved, onDestroy, BootReceiver).
+         */
+        fun requestSafeRebind(context: Context) {
             try {
-                val component = ComponentName(context, NotificationService::class.java)
-                val pm = context.packageManager
-                pm.setComponentEnabledSetting(
-                    component,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                pm.setComponentEnabledSetting(
-                    component,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    val component = ComponentName(context.applicationContext, NotificationService::class.java)
+                    requestRebind(component)
+                    Log.d(TAG, "requestSafeRebind requested successfully.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed requestSafeRebind: ${e.message}")
+            }
+        }
+
+        /**
+         * Forces component state toggle ONLY when user explicitly triggers rebind or when listener is disconnected.
+         */
+        fun triggerRebind(context: Context, forceComponentToggle: Boolean = false) {
+            try {
+                val appContext = context.applicationContext
+                val component = ComponentName(appContext, NotificationService::class.java)
+                if (forceComponentToggle || !isServiceRunning) {
+                    val pm = appContext.packageManager
+                    pm.setComponentEnabledSetting(
+                        component,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    pm.setComponentEnabledSetting(
+                        component,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     requestRebind(component)
                 }
-                Log.d(TAG, "Full component toggle rebind requested successfully.")
+                Log.d(TAG, "triggerRebind executed (forceToggle=$forceComponentToggle).")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to triggerRebind: ${e.message}")
             }
@@ -99,6 +139,7 @@ class NotificationService : NotificationListenerService() {
             Log.i(TAG, "Scanning ${activeNotifs.size} active notifications in status bar...")
             var count = 0
             for (sbn in activeNotifs) {
+                if (sbn.packageName == service.packageName) continue
                 service.onNotificationPosted(sbn)
                 count++
             }
@@ -114,40 +155,62 @@ class NotificationService : NotificationListenerService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        instance = this
         startForegroundNotification()
+        if (!isServiceRunning) {
+            requestSafeRebind(applicationContext)
+        }
         return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        Log.i(TAG, "onTaskRemoved: Task swiped from recents. Keeping service alive...")
+        Log.i(TAG, "onTaskRemoved: Task swiped from Recents. Keeping foreground gateway alive...")
+        // 1. Re-assert foreground notification immediately
         startForegroundNotification()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                requestRebind(ComponentName(applicationContext, NotificationService::class.java))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "onTaskRemoved requestRebind failed: ${e.message}")
-        }
-        triggerRebind(applicationContext)
+        // 2. Request safe rebind WITHOUT disabling component (disabling kills the active binder!)
+        requestSafeRebind(applicationContext)
+        // 3. Schedule Doze-aware resurrection alarm in case OEM ROM kills the process post-swipe
+        scheduleResurrectionAlarm(1500L)
+    }
 
-        // Safety resurrection via AlarmManager
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) instance = null
+        isServiceRunning = false
+        Log.w(TAG, "NotificationService onDestroy called. Requesting safe rebind & resurrection...")
+        requestSafeRebind(applicationContext)
+        scheduleResurrectionAlarm(2000L)
+    }
+
+    private fun scheduleResurrectionAlarm(delayMs: Long) {
         try {
             val restartIntent = Intent(applicationContext, NotificationService::class.java).apply {
                 setPackage(packageName)
             }
-            val pi = PendingIntent.getService(
-                applicationContext,
-                FOREGROUND_NOTIFICATION_ID,
-                restartIntent,
-                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val pendingFlags = PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            val pi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                PendingIntent.getForegroundService(
+                    applicationContext,
+                    FOREGROUND_NOTIFICATION_ID,
+                    restartIntent,
+                    pendingFlags
+                )
+            } else {
+                PendingIntent.getService(
+                    applicationContext,
+                    FOREGROUND_NOTIFICATION_ID,
+                    restartIntent,
+                    pendingFlags
+                )
+            }
             val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-            am?.set(
-                AlarmManager.ELAPSED_REALTIME,
-                SystemClock.elapsedRealtime() + 1000L,
-                pi
-            )
+            val triggerAt = SystemClock.elapsedRealtime() + delayMs
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am?.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            } else {
+                am?.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule resurrection alarm: ${e.message}")
         }
@@ -163,8 +226,10 @@ class NotificationService : NotificationListenerService() {
                     "Layanan Gateway Notifikasi",
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
-                    description = "Menjaga gateway tetap aktif memantau notifikasi di latar belakang"
+                    description = "Menjaga gateway tetap aktif memantau notifikasi 24/7 di latar belakang"
                     setShowBadge(false)
+                    enableLights(false)
+                    enableVibration(false)
                 }
                 nm.createNotificationChannel(channel)
             }
@@ -186,11 +251,19 @@ class NotificationService : NotificationListenerService() {
                 Notification.Builder(this)
             }
 
-            builder.setContentTitle("NotifyMe aktif memantau webhook")
-                .setContentText("Memantau notifikasi & meneruskan ke webhook")
-                .setSmallIcon(R.mipmap.ic_launcher)
+            builder.setContentTitle("Notifymee aktif memantau webhook")
+                .setContentText("Memantau notifikasi & meneruskan ke webhook 24/7")
+                .setSmallIcon(R.drawable.ic_stat_notifyme)
+                .setColor(0xFF00796B.toInt())
+                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
+                .setCategory(Notification.CATEGORY_SERVICE)
                 .setOngoing(true)
+                .setOnlyAlertOnce(true)
                 .setAutoCancel(false)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+            }
 
             if (pendingIntent != null) {
                 builder.setContentIntent(pendingIntent)
@@ -213,23 +286,8 @@ class NotificationService : NotificationListenerService() {
             } else {
                 startForeground(FOREGROUND_NOTIFICATION_ID, notif)
             }
-            Log.i(TAG, "startForeground initialized successfully (ongoing foreground service).")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to startForeground: ${e.message}")
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (instance == this) instance = null
-        isServiceRunning = false
-        Log.w(TAG, "NotificationService onDestroy called. Requesting rebind...")
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                requestRebind(ComponentName(applicationContext, NotificationService::class.java))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "onDestroy requestRebind failed: ${e.message}")
         }
     }
 
@@ -244,24 +302,29 @@ class NotificationService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         isServiceRunning = false
-        Log.w(TAG, "NotificationListenerService disconnected. Attempting auto-rebind...")
-        triggerRebind(this)
+        Log.w(TAG, "NotificationListenerService disconnected. Requesting safe rebind...")
+        requestSafeRebind(applicationContext)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
         if (sbn == null) return
 
-        val packageName = sbn.packageName ?: return
+        val incomingPkg = sbn.packageName ?: return
 
-        // Ignore notifications from ourselves to prevent infinite recursive trigger loops
-        if (packageName == applicationContext.packageName) return
+        // 1. Prevent infinite loop: strictly ignore notifications from NotifyMe itself or system UI summaries
+        if (incomingPkg == applicationContext.packageName || incomingPkg == "android") return
 
         val notification = sbn.notification ?: return
-        val isGroupSummary = (notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0
+        val flags = notification.flags
+        val isGroupSummary = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
+        val isOngoing = sbn.isOngoing ||
+            (flags and Notification.FLAG_ONGOING_EVENT) != 0 ||
+            (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0
+
         val extras = notification.extras ?: return
 
-        // 1. Extract Title & Conversation Title
+        // 2. Extract Title & Conversation Title
         val conversationTitle = (extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
             ?: extras.getCharSequence("android.conversationTitle"))?.toString()
             ?.replace("[\u200B-\u200F\u202A-\u202E]".toRegex(), "")?.trim() ?: ""
@@ -274,7 +337,7 @@ class NotificationService : NotificationListenerService() {
             title = conversationTitle
         }
 
-        // 2. Extract Text & Variants
+        // 3. Extract Text & Variants
         var text = (extras.getCharSequence(Notification.EXTRA_TEXT)
             ?: extras.getCharSequence("android.text"))?.toString()
             ?.replace("[\u200B-\u200F\u202A-\u202E]".toRegex(), "")?.trim() ?: ""
@@ -291,7 +354,7 @@ class NotificationService : NotificationListenerService() {
             ?: extras.getCharSequence("android.summaryText"))?.toString()
             ?.replace("[\u200B-\u200F\u202A-\u202E]".toRegex(), "")?.trim() ?: ""
 
-        // 3. Extract Text Lines (EXTRA_TEXT_LINES - used when multiple messages arrive in WhatsApp / Telegram)
+        // 4. Extract Text Lines (EXTRA_TEXT_LINES - WhatsApp / Telegram stacked messages)
         val textLinesRaw = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
             ?: extras.getCharSequenceArrayList("android.textLines")?.toTypedArray()
         val linesList = mutableListOf<String>()
@@ -303,7 +366,7 @@ class NotificationService : NotificationListenerService() {
         }
         val linesContent = linesList.joinToString("\n")
 
-        // 4. Extract MessagingStyle EXTRA_MESSAGES and EXTRA_HISTORIC_MESSAGES
+        // 5. Extract MessagingStyle EXTRA_MESSAGES and EXTRA_HISTORIC_MESSAGES
         val messagesList = mutableListOf<Map<String, Any>>()
         val messagingSb = StringBuilder()
 
@@ -318,7 +381,12 @@ class NotificationService : NotificationListenerService() {
                 var sender = msg.getCharSequence("sender")?.toString() ?: ""
                 if (sender.isBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     try {
-                        val person = msg.getParcelable<android.app.Person>("sender_person")
+                        @Suppress("DEPRECATION")
+                        val person = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            msg.getParcelable("sender_person", android.app.Person::class.java)
+                        } else {
+                            msg.getParcelable("sender_person")
+                        }
                         if (person != null) {
                             sender = person.name?.toString() ?: ""
                         }
@@ -331,13 +399,13 @@ class NotificationService : NotificationListenerService() {
                 val cleanBody = body.replace("[\u200B-\u200F\u202A-\u202E]".toRegex(), "").trim()
 
                 if (cleanBody.isNotBlank()) {
-                    val map = mutableMapOf<String, Any>(
-                        "sender" to cleanSender,
-                        "text" to cleanBody,
-                        "timestamp" to msgTime
+                    messagesList.add(
+                        mapOf(
+                            "sender" to cleanSender,
+                            "text" to cleanBody,
+                            "timestamp" to msgTime
+                        )
                     )
-                    messagesList.add(map)
-
                     if (cleanSender.isNotBlank()) messagingSb.append("$cleanSender: ")
                     messagingSb.append(cleanBody).append("\n")
                 }
@@ -348,9 +416,9 @@ class NotificationService : NotificationListenerService() {
         extractMessagesFromAny(extras.get(Notification.EXTRA_MESSAGES))
         val messagingContent = messagingSb.toString().trim()
 
-        val ticker = notification.tickerText?.toString()?.replace("[\u200B-\u200F\u202A-\u202E]".toRegex(), "")?.trim() ?: ""
+        val ticker = notification.tickerText?.toString()
+            ?.replace("[\u200B-\u200F\u202A-\u202E]".toRegex(), "")?.trim() ?: ""
 
-        // Resolve latest message
         val latestMessage = when {
             messagesList.isNotEmpty() -> messagesList.last()["text"] as? String ?: ""
             linesList.isNotEmpty() -> linesList.last()
@@ -358,7 +426,6 @@ class NotificationService : NotificationListenerService() {
             else -> text
         }
 
-        // If primary text is blank, resolve from fallbacks
         if (text.isBlank()) {
             text = when {
                 latestMessage.isNotBlank() -> latestMessage
@@ -371,7 +438,9 @@ class NotificationService : NotificationListenerService() {
             }
         }
 
-        // Full content for Regex searching
+        // Ignore completely empty/placeholder notifications
+        if (title.isBlank() && text.isBlank()) return
+
         val fullContent = buildString {
             if (title.isNotBlank()) append(title).append(" ")
             if (conversationTitle.isNotBlank() && conversationTitle != title) append(conversationTitle).append(" ")
@@ -384,80 +453,43 @@ class NotificationService : NotificationListenerService() {
             if (summaryText.isNotBlank()) append(summaryText)
         }.trim()
 
-        // SQLite deduplication check: has this notification already been processed and dispatched?
         val latestMsgTime = if (messagesList.isNotEmpty()) {
             messagesList.last()["timestamp"] as? Long ?: 0L
         } else 0L
 
+        // Content-deterministic key (avoids postTime churn on notification updates)
         val notifKey = if (latestMsgTime > 0) {
-            "${packageName}_${title}_${text}_${latestMsgTime}"
+            "${incomingPkg}_${title}_${latestMessage}_${latestMsgTime}"
         } else {
-            "${sbn.key ?: (packageName + "_" + sbn.id)}_${sbn.postTime}"
+            "${incomingPkg}_${sbn.id}_${title}_${text.hashCode()}"
         }
 
-        // 0. Check Package Blacklist / Exclude Engine
-        val blacklistedPattern = AppDatabase.getInstance(applicationContext).checkBlacklisted(
-            packageName = packageName,
+        // Fast in-memory burst deduplication before touching SQLite
+        if (isDuplicateInMemory("global|$incomingPkg|$title|$text|$isGroupSummary", 1500L)) {
+            return
+        }
+
+        val db = AppDatabase.getInstance(applicationContext)
+
+        // Check Package Blacklist / Exclude Engine
+        val blacklistedPattern = db.checkBlacklisted(
+            packageName = incomingPkg,
             title = title,
             text = text,
             fullContent = fullContent
         )
         if (blacklistedPattern != null) {
-            Log.i(TAG, "Notification from $packageName matches blacklist pattern '$blacklistedPattern'. Skipping...")
-            val blLog = NotificationLogStore.createLogEntry(
-                packageName = packageName,
-                title = title,
-                text = text.ifBlank { fullContent },
-                matched = false,
-                matchedRuleName = "-",
-                webhookUrl = "-",
-                httpStatus = 0,
-                responseBody = "",
-                errorMessage = "Dilewati: Notifikasi cocok dengan Blacklist $packageName (\"$blacklistedPattern\")",
-                latencyMs = 0,
-                payloadSent = ""
-            )
-            NotificationLogStore.addLog(
-                context = applicationContext,
-                logItem = blLog,
-                notificationKey = notifKey,
-                status = "SKIPPED",
-                isGroupSummary = isGroupSummary
-            )
+            Log.i(TAG, "Notification from $incomingPkg matches blacklist '$blacklistedPattern'. Skipping...")
             return
         }
 
-        if (AppDatabase.getInstance(applicationContext).isNotificationProcessed(notifKey)) {
-            Log.d(TAG, "Notification already processed and sent to webhook in SQLite ($notifKey)")
-            val dedupLog = NotificationLogStore.createLogEntry(
-                packageName = packageName,
-                title = title,
-                text = text.ifBlank { fullContent },
-                matched = true,
-                matchedRuleName = "-",
-                webhookUrl = "-",
-                httpStatus = 0,
-                responseBody = "",
-                errorMessage = "Dilewati: Pesan ini sudah pernah berhasil dikirim ke webhook sebelumnya (Duplikat)",
-                latencyMs = 0,
-                payloadSent = ""
-            )
-            NotificationLogStore.addLog(
-                context = applicationContext,
-                logItem = dedupLog,
-                notificationKey = notifKey,
-                status = "SKIPPED",
-                isGroupSummary = isGroupSummary
-            )
+        if (db.isNotificationProcessed(notifKey)) {
+            Log.d(TAG, "Notification already processed in SQLite ($notifKey). Skipping.")
             return
         }
 
-        // Get readable app label (e.g. "Telegram", "WhatsApp", "Messages")
-        val appName = getAppLabel(packageName)
+        val appName = getAppLabel(incomingPkg)
         val timestamp = sbn.postTime
-
-        Log.i(TAG, "Notification received from $appName ($packageName): Title='$title', Text='$text', Summary=$isGroupSummary")
-
         val rules = RuleStore.getRules(applicationContext)
         var anyRuleMatched = false
 
@@ -465,73 +497,41 @@ class NotificationService : NotificationListenerService() {
             if (!rule.enabled) continue
 
             // 1. Package Name / App Name Filter Check
-            if (!isPackageOrAppMatch(rule.packageName, packageName, appName)) {
+            if (!isPackageOrAppMatch(rule.packageName, incomingPkg, appName)) {
                 continue
             }
 
-            // 2. Group Summary Check (User configurable per rule)
-            if (isGroupSummary && rule.ignoreGroupSummary) {
-                Log.d(TAG, "Rule '${rule.name}' ignores group summary notification from $packageName")
+            // 2. Ongoing Notification Filter (prevents music player / download progress bar spam)
+            if (isOngoing && rule.ignoreOngoing) {
                 anyRuleMatched = true
-                val summaryLog = NotificationLogStore.createLogEntry(
-                    packageName = packageName,
-                    title = title,
-                    text = text.ifBlank { fullContent },
-                    matched = true,
-                    matchedRuleName = rule.name,
-                    webhookUrl = rule.webhookUrl,
-                    httpStatus = 0,
-                    responseBody = "",
-                    errorMessage = "Dilewati: Ringkasan Notifikasi Grup (Group Summary) diabaikan oleh setelan aturan",
-                    latencyMs = 0,
-                    payloadSent = ""
-                )
-                NotificationLogStore.addLog(
-                    context = applicationContext,
-                    logItem = summaryLog,
-                    notificationKey = notifKey,
-                    status = "SKIPPED",
-                    isGroupSummary = true
-                )
                 continue
             }
 
-            // 3. Deduplication Check (User configurable per rule)
+            // 3. Group Summary Filter (prevents WhatsApp / Telegram duplicate group header triggers)
+            if (isGroupSummary && rule.ignoreGroupSummary) {
+                anyRuleMatched = true
+                continue
+            }
+
+            // 4. Deduplication Check
             if (rule.deduplicateMessages) {
-                val isRecentDispatched = AppDatabase.getInstance(applicationContext).isRecentMessageProcessed(packageName, title, text, 1800000L)
-                val dedupKey = if (latestMsgTime > 0) {
-                    "${rule.id}|$packageName|$title|$text|$latestMsgTime"
-                } else {
-                    "${rule.id}|$packageName|$title|$text"
-                }
-                if (isRecentDispatched || isDuplicate(dedupKey)) {
-                    Log.d(TAG, "Rule '${rule.name}' ignores duplicate notification update ($dedupKey)")
+                val dedupKey = "${rule.id}|$incomingPkg|$title|$text"
+                val isRecentDispatched = db.isRecentMessageProcessed(incomingPkg, title, text, 1_800_000L)
+                if (isRecentDispatched || isDuplicateInMemory(dedupKey, DEDUP_WINDOW_MS)) {
+                    Log.d(TAG, "Rule '${rule.name}' skipped duplicate message ($dedupKey)")
                     anyRuleMatched = true
-                    val skipLog = NotificationLogStore.createLogEntry(
-                        packageName = packageName,
-                        title = title,
-                        text = text.ifBlank { fullContent },
-                        matched = true,
-                        matchedRuleName = rule.name,
-                        webhookUrl = rule.webhookUrl,
-                        httpStatus = 0,
-                        responseBody = "",
-                        errorMessage = "Dilewati: Pesan ini sudah pernah berhasil dikirim dalam 30 menit terakhir (Duplikat)",
-                        latencyMs = 0,
-                        payloadSent = ""
-                    )
-                    NotificationLogStore.addLog(
-                        context = applicationContext,
-                        logItem = skipLog,
-                        notificationKey = notifKey,
-                        status = "SKIPPED",
-                        isGroupSummary = isGroupSummary
-                    )
                     continue
                 }
             }
 
-            // 4. Regex Filter Check
+            // 5. Per-Rule Cooldown / Anti-Spam Check
+            if (isRuleInCooldown(rule.id, rule.cooldownSeconds)) {
+                Log.d(TAG, "Rule '${rule.name}' is in cooldown (${rule.cooldownSeconds}s). Skipping.")
+                anyRuleMatched = true
+                continue
+            }
+
+            // 6. Regex Filter & Named Group Extraction
             val regex = rule.regexPattern.trim()
             if (regex.isNotBlank()) {
                 val flags = if (rule.regexIgnoreCase) Pattern.CASE_INSENSITIVE or Pattern.MULTILINE else Pattern.MULTILINE
@@ -545,13 +545,12 @@ class NotificationService : NotificationListenerService() {
                         for (i in 1..matcher.groupCount()) {
                             groups.add(matcher.group(i) ?: "")
                         }
-
-                        Log.i(TAG, "Rule matched: '${rule.name}' for pkg=$packageName. Groups=$groups")
+                        val namedGroups = extractNamedGroups(regex, matcher)
 
                         WebhookDispatcher.dispatch(
                             context = applicationContext,
                             rule = rule,
-                            packageName = packageName,
+                            packageName = incomingPkg,
                             appName = appName,
                             title = title,
                             text = text,
@@ -560,6 +559,7 @@ class NotificationService : NotificationListenerService() {
                             fullContent = fullContent,
                             timestamp = timestamp,
                             regexMatches = groups,
+                            namedRegexMatches = namedGroups,
                             isGroupSummary = isGroupSummary,
                             notificationKey = notifKey,
                             lines = linesList,
@@ -567,64 +567,38 @@ class NotificationService : NotificationListenerService() {
                             conversationTitle = conversationTitle,
                             latestMessage = latestMessage
                         )
-                    } else {
-                        // Regex did not match
-                        if (!rule.sendOnlyIfMatched) {
-                            anyRuleMatched = true
-                            WebhookDispatcher.dispatch(
-                                context = applicationContext,
-                                rule = rule,
-                                packageName = packageName,
-                                appName = appName,
-                                title = title,
-                                text = text,
-                                bigText = bigText,
-                                subText = subText,
-                                fullContent = fullContent,
-                                timestamp = timestamp,
-                                regexMatches = emptyList(),
-                                isGroupSummary = isGroupSummary,
-                                notificationKey = notifKey,
-                                lines = linesList,
-                                messages = messagesList,
-                                conversationTitle = conversationTitle,
-                                latestMessage = latestMessage
-                            )
-                        } else {
-                            anyRuleMatched = true
-                            val regexSkipLog = NotificationLogStore.createLogEntry(
-                                packageName = packageName,
-                                title = title,
-                                text = text.ifBlank { fullContent },
-                                matched = false,
-                                matchedRuleName = rule.name,
-                                webhookUrl = rule.webhookUrl,
-                                httpStatus = 0,
-                                responseBody = "",
-                                errorMessage = "Dilewati: Isi notifikasi tidak cocok dengan filter regex aturan '${rule.name}'",
-                                latencyMs = 0,
-                                payloadSent = ""
-                            )
-                            NotificationLogStore.addLog(
-                                context = applicationContext,
-                                logItem = regexSkipLog,
-                                notificationKey = notifKey,
-                                status = "SKIPPED",
-                                isGroupSummary = isGroupSummary
-                            )
-                        }
+                    } else if (!rule.sendOnlyIfMatched) {
+                        anyRuleMatched = true
+                        WebhookDispatcher.dispatch(
+                            context = applicationContext,
+                            rule = rule,
+                            packageName = incomingPkg,
+                            appName = appName,
+                            title = title,
+                            text = text,
+                            bigText = bigText,
+                            subText = subText,
+                            fullContent = fullContent,
+                            timestamp = timestamp,
+                            regexMatches = emptyList(),
+                            namedRegexMatches = emptyMap(),
+                            isGroupSummary = isGroupSummary,
+                            notificationKey = notifKey,
+                            lines = linesList,
+                            messages = messagesList,
+                            conversationTitle = conversationTitle,
+                            latestMessage = latestMessage
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Regex compile error in rule '${rule.name}': ${e.message}")
                 }
             } else {
-                // No regex specified -> Match ALL notifications from this app/package
                 anyRuleMatched = true
-                Log.i(TAG, "Rule matched (No Regex): '${rule.name}' for pkg=$packageName")
                 WebhookDispatcher.dispatch(
                     context = applicationContext,
                     rule = rule,
-                    packageName = packageName,
+                    packageName = incomingPkg,
                     appName = appName,
                     title = title,
                     text = text,
@@ -633,6 +607,7 @@ class NotificationService : NotificationListenerService() {
                     fullContent = fullContent,
                     timestamp = timestamp,
                     regexMatches = emptyList(),
+                    namedRegexMatches = emptyMap(),
                     isGroupSummary = isGroupSummary,
                     notificationKey = notifKey,
                     lines = linesList,
@@ -643,10 +618,10 @@ class NotificationService : NotificationListenerService() {
             }
         }
 
-        // Record log if no rule matched so user can see it in "Log Webhook"
-        if (!anyRuleMatched) {
+        // Only log non-summary, non-ongoing unhandled notifications to avoid polluting SQLite
+        if (!anyRuleMatched && !isGroupSummary && !isOngoing) {
             val unhandledLog = NotificationLogStore.createLogEntry(
-                packageName = packageName,
+                packageName = incomingPkg,
                 title = title,
                 text = text.ifBlank { fullContent },
                 matched = false,
@@ -654,7 +629,7 @@ class NotificationService : NotificationListenerService() {
                 webhookUrl = "-",
                 httpStatus = 0,
                 responseBody = "",
-                errorMessage = "Dilewati: Notifikasi diterima tetapi tidak ada aturan filter yang cocok",
+                errorMessage = "Dilewati: Tidak ada aturan filter yang cocok",
                 latencyMs = 0,
                 payloadSent = ""
             )
@@ -663,10 +638,25 @@ class NotificationService : NotificationListenerService() {
                 logItem = unhandledLog,
                 notificationKey = notifKey,
                 status = "SKIPPED",
-                isGroupSummary = isGroupSummary
+                isGroupSummary = false
             )
             WebhookDispatcher.onLogUpdated?.invoke()
         }
+    }
+
+    private fun extractNamedGroups(regex: String, matcher: java.util.regex.Matcher): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val nameMatcher = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9]*)>").matcher(regex)
+        while (nameMatcher.find()) {
+            val groupName = nameMatcher.group(1) ?: continue
+            try {
+                val value = matcher.group(groupName)
+                if (value != null) {
+                    result[groupName] = value
+                }
+            } catch (_: Exception) {}
+        }
+        return result
     }
 
     private fun isPackageOrAppMatch(rulePkg: String, incomingPkg: String, appLabel: String): Boolean {
@@ -678,12 +668,10 @@ class NotificationService : NotificationListenerService() {
         val appLabelLower = appLabel.lowercase()
 
         return targets.any { item ->
-            // Match exact package or partial package (e.g. "telegram" matches "org.telegram.messenger")
             incomingPkgLower == item ||
-            incomingPkgLower.contains(item) ||
-            // Match app display name (e.g. "telegram" matches "Telegram")
-            appLabelLower == item ||
-            appLabelLower.contains(item)
+                incomingPkgLower.contains(item) ||
+                appLabelLower == item ||
+                appLabelLower.contains(item)
         }
     }
 

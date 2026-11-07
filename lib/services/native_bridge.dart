@@ -38,7 +38,9 @@ class NativeBridge {
   final List<VoidCallback> _logListeners = [];
 
   void addLogListener(VoidCallback listener) {
-    _logListeners.add(listener);
+    if (!_logListeners.contains(listener)) {
+      _logListeners.add(listener);
+    }
   }
 
   void removeLogListener(VoidCallback listener) {
@@ -205,7 +207,6 @@ class NativeBridge {
 
   Future<List<WebhookRule>> getRules() async {
     if (!isAndroid) {
-      // Fallback in-memory defaults for iOS / Web / Desktop preview
       return _fallbackRules;
     }
     try {
@@ -236,7 +237,7 @@ class NativeBridge {
   Future<String> exportDatabaseJson() async {
     if (!isAndroid) {
       return jsonEncode({
-        'version': 1,
+        'version': 2,
         'exportedAt': DateTime.now().millisecondsSinceEpoch,
         'rules': _fallbackRules.map((r) => r.toJson()).toList(),
       });
@@ -294,6 +295,43 @@ class NativeBridge {
     } catch (e) {
       debugPrint('clearLogs error: $e');
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> retryWebhookLog(String logId) async {
+    if (!isAndroid) {
+      return {
+        'success': true,
+        'statusCode': 200,
+        'message': 'Retry sukses (Preview Mode)',
+      };
+    }
+    try {
+      final res = await _channel.invokeMethod('retryWebhookLog', {'logId': logId});
+      return Map<String, dynamic>.from(res);
+    } catch (e) {
+      return {
+        'success': false,
+        'statusCode': 0,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  Future<Map<String, int>> retryAllFailedLogs() async {
+    if (!isAndroid) {
+      return {'successCount': 0, 'totalTried': 0};
+    }
+    try {
+      final res = await _channel.invokeMethod('retryAllFailedLogs');
+      final map = Map<String, dynamic>.from(res);
+      return {
+        'successCount': (map['successCount'] as num?)?.toInt() ?? 0,
+        'totalTried': (map['totalTried'] as num?)?.toInt() ?? 0,
+      };
+    } catch (e) {
+      debugPrint('retryAllFailedLogs error: $e');
+      return {'successCount': 0, 'totalTried': 0};
     }
   }
 
@@ -392,7 +430,6 @@ class NativeBridge {
     }
   }
 
-  // Fallback defaults for previewing UI
   List<WebhookRule> _fallbackRules = [
     WebhookRule(
       id: 'rule_default_all',
@@ -406,9 +443,10 @@ class NativeBridge {
       sendOnlyIfMatched: false,
       ignoreGroupSummary: true,
       deduplicateMessages: true,
+      ignoreOngoing: true,
+      cooldownSeconds: 0,
     ),
   ];
 
   final List<NotificationLog> _fallbackLogs = [];
 }
-

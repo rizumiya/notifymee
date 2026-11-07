@@ -92,6 +92,12 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     }
   }
 
+  Future<void> _requestBatteryUnrestricted() async {
+    await _bridge.requestIgnoreBatteryOptimization();
+    await Future.delayed(const Duration(milliseconds: 500));
+    await _checkPermissions();
+  }
+
   Future<void> _loadRules() async {
     final rules = await _bridge.getRules();
     if (mounted) {
@@ -169,8 +175,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Prominent Warning Banner if App Notifications are turned off in Android settings
-                if (!_areAppNotificationsEnabled)
+                // 1. Prominent Warning Banner if App Notifications are turned off in Android settings
+                if (!_areAppNotificationsEnabled) ...[
                   Card(
                     color: Colors.red.shade50,
                     shape: RoundedRectangleBorder(
@@ -244,11 +250,64 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                ],
 
-                if (!_areAppNotificationsEnabled) const SizedBox(height: 14),
+                // 2. Direct Battery Optimization Card (1-Tap ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                if (!_isBatteryIgnored) ...[
+                  Card(
+                    color: Colors.amber.shade50,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(color: Colors.amber.shade600, width: 1.5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.battery_alert_rounded, color: Colors.amber.shade900, size: 26),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '${i18n.batteryTitle}: ${i18n.statusRestricted}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            i18n.batteryStepDesc,
+                            style: const TextStyle(fontSize: 12, color: Colors.black87),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _requestBatteryUnrestricted,
+                              icon: const Icon(Icons.battery_charging_full, size: 18),
+                              label: Text(i18n.btnGrantBattery),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.amber.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
 
-                // Prominent Warning Banner if settings are not complete
-                if (!isConfigured)
+                // 3. Prominent Warning Banner if Notification Access is not granted
+                if (!_isPermissionGranted) ...[
                   Card(
                     color: Colors.deepOrange.shade50,
                     shape: RoundedRectangleBorder(
@@ -297,10 +356,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                ],
 
-                if (!isConfigured) const SizedBox(height: 14),
-
-                // Main Service Status Card
+                // 4. Main Service Status Card
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -354,7 +413,25 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
+                        // Quick Permission Status Chips
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            _buildPermissionBadge(
+                              label: '${i18n.notifAccessTitle}: ${_isPermissionGranted ? i18n.statusAllowed : i18n.statusDenied}',
+                              isOk: _isPermissionGranted,
+                              onTap: () => _bridge.openNotificationSettings(),
+                            ),
+                            _buildPermissionBadge(
+                              label: '${i18n.batteryTitle}: ${_isBatteryIgnored ? i18n.statusUnrestricted : i18n.statusRestricted}',
+                              isOk: _isBatteryIgnored,
+                              onTap: _requestBatteryUnrestricted,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
                         Row(
                           children: [
                             ElevatedButton.icon(
@@ -643,6 +720,40 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               ],
             ),
           );
+  }
+
+  Widget _buildPermissionBadge({
+    required String label,
+    required bool isOk,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isOk ? Colors.white24 : Colors.black26,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white38),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isOk ? Icons.verified_user : Icons.touch_app,
+              size: 13,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildStatCard({

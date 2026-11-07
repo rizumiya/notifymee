@@ -14,6 +14,8 @@ class WebhookRule {
   int maxRetries;
   bool ignoreGroupSummary;
   bool deduplicateMessages;
+  bool ignoreOngoing;
+  int cooldownSeconds;
 
   WebhookRule({
     required this.id,
@@ -31,6 +33,8 @@ class WebhookRule {
     this.maxRetries = 3,
     this.ignoreGroupSummary = true,
     this.deduplicateMessages = true,
+    this.ignoreOngoing = true,
+    this.cooldownSeconds = 0,
   }) : headers = headers ?? {'Content-Type': 'application/json'};
 
   factory WebhookRule.fromJson(Map<String, dynamic> json) {
@@ -59,8 +63,14 @@ class WebhookRule {
       maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 3,
       ignoreGroupSummary: json['ignoreGroupSummary'] as bool? ?? true,
       deduplicateMessages: json['deduplicateMessages'] as bool? ?? true,
+      ignoreOngoing: json['ignoreOngoing'] as bool? ?? true,
+      cooldownSeconds: (json['cooldownSeconds'] as num?)?.toInt() ?? 0,
     );
   }
+
+  factory WebhookRule.fromMap(Map<String, dynamic> map) => WebhookRule.fromJson(map);
+
+  Map<String, dynamic> toMap() => toJson();
 
   Map<String, dynamic> toJson() {
     return {
@@ -79,6 +89,8 @@ class WebhookRule {
       'maxRetries': maxRetries,
       'ignoreGroupSummary': ignoreGroupSummary,
       'deduplicateMessages': deduplicateMessages,
+      'ignoreOngoing': ignoreOngoing,
+      'cooldownSeconds': cooldownSeconds,
     };
   }
 
@@ -98,6 +110,8 @@ class WebhookRule {
     int? maxRetries,
     bool? ignoreGroupSummary,
     bool? deduplicateMessages,
+    bool? ignoreOngoing,
+    int? cooldownSeconds,
   }) {
     return WebhookRule(
       id: id ?? this.id,
@@ -115,10 +129,11 @@ class WebhookRule {
       maxRetries: maxRetries ?? this.maxRetries,
       ignoreGroupSummary: ignoreGroupSummary ?? this.ignoreGroupSummary,
       deduplicateMessages: deduplicateMessages ?? this.deduplicateMessages,
+      ignoreOngoing: ignoreOngoing ?? this.ignoreOngoing,
+      cooldownSeconds: cooldownSeconds ?? this.cooldownSeconds,
     );
   }
 
-  // Universal & neutral presets for any type of notification & workflow
   static List<WebhookRulePreset> getPresets(bool isIndonesian) {
     if (isIndonesian) return presets;
     return [
@@ -140,9 +155,9 @@ class WebhookRule {
       ),
       WebhookRulePreset(
         title: 'OTP / 2FA Extraction',
-        description: 'Detect and extract verification token from message.',
+        description: 'Detect and extract verification token via named group (?<otp>...).',
         packageName: '*',
-        regexPattern: r'(?i)(?:code|otp|token|pin)[\s:]+([A-Za-z0-9]{4,8})',
+        regexPattern: r'(?i)(?:code|otp|token|pin)[\s:]+(?<otp>[A-Za-z0-9]{4,8})',
         sampleTitle: 'Security Code',
         sampleText: 'Your verification code is 849201. Valid for 5 minutes.',
       ),
@@ -156,9 +171,9 @@ class WebhookRule {
       ),
       WebhookRulePreset(
         title: 'Numeric Value Extraction',
-        description: 'Extract monetary or numeric values from notifications.',
+        description: 'Extract monetary or numeric values via (?<amount>...).',
         packageName: '*',
-        regexPattern: r'(?:Rp|IDR|\$|\b)\s*([\d\.,]+)',
+        regexPattern: r'(?:Rp|IDR|\$|\b)\s*(?<amount>[\d\.,]+)',
         sampleTitle: 'Transaction Data',
         sampleText: 'A payment of \$50.00 has been successfully processed.',
       ),
@@ -184,9 +199,9 @@ class WebhookRule {
     ),
     WebhookRulePreset(
       title: 'Ekstraksi Kode OTP / 2FA',
-      description: 'Mendeteksi dan mengekstrak kode verifikasi / token angka dari pesan.',
+      description: 'Mendeteksi dan mengekstrak kode verifikasi ke variabel {{otp}} dan {{group1}}.',
       packageName: '*',
-      regexPattern: r'(?i)(?:kode|otp|token|code)[\s:]+([A-Za-z0-9]{4,8})',
+      regexPattern: r'(?i)(?:kode|otp|token|code)[\s:]+(?<otp>[A-Za-z0-9]{4,8})',
       sampleTitle: 'Kode Keamanan',
       sampleText: 'Kode verifikasi Anda adalah 849201. Berlaku selama 5 menit.',
     ),
@@ -199,12 +214,12 @@ class WebhookRule {
       sampleText: 'ERROR: Koneksi jaringan terputus saat sinkronisasi data.',
     ),
     WebhookRulePreset(
-      title: 'Ekstraksi Nilai Angka',
-      description: 'Mengekstrak nominal angka atau data numerik dari notifikasi.',
+      title: 'Ekstraksi Nilai Angka / QRIS',
+      description: 'Mengekstrak nominal angka ke variabel {{amount}} dan {{group1}}.',
       packageName: '*',
-      regexPattern: r'(?:Rp|IDR|\$|\b)\s*([\d\.,]+)',
+      regexPattern: r'(?:Rp|IDR|\$|\b)\s*(?<amount>[\d\.,]+)',
       sampleTitle: 'Notifikasi Data',
-      sampleText: 'Nilai tercatat sebesar 50.000 telah berhasil diterima.',
+      sampleText: 'Pembayaran QRIS sebesar Rp 50.000 telah berhasil diterima.',
     ),
   ];
 }

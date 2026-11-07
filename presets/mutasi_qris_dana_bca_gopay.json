@@ -1,0 +1,44 @@
+{
+  "format": "notifymee_package_bundle_v2",
+  "export_name": "mutasi_qris_dana_bca_gopay.json",
+  "description": "Ekstraktor otomatis nominal pembayaran QRIS & transfer bank (DANA, BCA, GoPay, OVO) menggunakan Named Regex {{nominal}} beserta filter anti-iklan.",
+  "package_filter": "id.dana, com.bca, com.gojek.app, com.ovo.id",
+  "exported_at": "2026-11-06T17:40:00Z",
+  "rules": [
+    {
+      "id": "preset_qris_mutasi_01",
+      "name": "Mutasi Pembayaran QRIS & Transfer",
+      "isEnabled": true,
+      "packageFilter": "id.dana, com.bca, com.gojek.app, com.ovo.id",
+      "keywordRegex": "Rp\\s?(?<nominal>[0-9.,]+)",
+      "ignoreCase": true,
+      "webhookUrl": "https://httpbin.org/post",
+      "httpMethod": "POST",
+      "secretKey": "",
+      "customTemplate": "{\n  \"event\": \"payment_received\",\n  \"app\": \"{{app_name}}\",\n  \"package\": \"{{package_name}}\",\n  \"amount_rp\": \"{{nominal}}\",\n  \"title\": \"{{title}}\",\n  \"message\": \"{{big_text}}\",\n  \"datetime\": \"{{datetime}}\"\n}",
+      "maxRetries": 5,
+      "ignoreGroupSummary": true,
+      "deduplicate": true,
+      "ignoreOngoing": true,
+      "cooldownSeconds": 0
+    }
+  ],
+  "blacklists": [
+    {
+      "packageName": "id.dana",
+      "pattern": "Voucher"
+    },
+    {
+      "packageName": "id.dana",
+      "pattern": "Cashback"
+    },
+    {
+      "packageName": "com.gojek.app",
+      "pattern": "Promo"
+    },
+    {
+      "packageName": "com.ovo.id",
+      "pattern": "Diskon"
+    }
+  ]
+}

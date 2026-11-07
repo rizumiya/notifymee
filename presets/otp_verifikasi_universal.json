@@ -1,0 +1,32 @@
+{
+  "format": "notifymee_package_bundle_v2",
+  "export_name": "otp_verifikasi_universal.json",
+  "description": "Ekstraktor kode OTP 4-8 digit otomatis dari semua aplikasi menggunakan Named Regex {{otp}}.",
+  "package_filter": "*",
+  "exported_at": "2026-11-06T17:40:00Z",
+  "rules": [
+    {
+      "id": "preset_otp_universal_01",
+      "name": "Ekstraktor Kode OTP Universal",
+      "isEnabled": true,
+      "packageFilter": "*",
+      "keywordRegex": "(?:OTP|kode|code|verifikasi|pin).*?(?<otp>\\b\\d{4,8}\\b)",
+      "ignoreCase": true,
+      "webhookUrl": "https://httpbin.org/post",
+      "httpMethod": "POST",
+      "secretKey": "",
+      "customTemplate": "{\n  \"event\": \"otp_detected\",\n  \"app\": \"{{app_name}}\",\n  \"package\": \"{{package_name}}\",\n  \"otp_code\": \"{{otp}}\",\n  \"raw_text\": \"{{text}}\",\n  \"timestamp\": {{timestamp}}\n}",
+      "maxRetries": 3,
+      "ignoreGroupSummary": true,
+      "deduplicate": true,
+      "ignoreOngoing": true,
+      "cooldownSeconds": 0
+    }
+  ],
+  "blacklists": [
+    {
+      "packageName": "*",
+      "pattern": "Berjalan di latar belakang"
+    }
+  ]
+}

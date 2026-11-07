@@ -19,7 +19,9 @@ data class WebhookRule(
     val secretKey: String = "",
     val maxRetries: Int = 3,
     val ignoreGroupSummary: Boolean = true,
-    val deduplicateMessages: Boolean = true
+    val deduplicateMessages: Boolean = true,
+    val ignoreOngoing: Boolean = true,
+    val cooldownSeconds: Int = 0
 ) {
     fun toJson(): JSONObject {
         val obj = JSONObject()
@@ -31,7 +33,7 @@ data class WebhookRule(
         obj.put("regexIgnoreCase", regexIgnoreCase)
         obj.put("webhookUrl", webhookUrl)
         obj.put("httpMethod", httpMethod)
-        
+
         val headersObj = JSONObject()
         for ((k, v) in headers) {
             headersObj.put(k, v)
@@ -43,6 +45,8 @@ data class WebhookRule(
         obj.put("maxRetries", maxRetries)
         obj.put("ignoreGroupSummary", ignoreGroupSummary)
         obj.put("deduplicateMessages", deduplicateMessages)
+        obj.put("ignoreOngoing", ignoreOngoing)
+        obj.put("cooldownSeconds", cooldownSeconds)
         return obj
     }
 
@@ -75,15 +79,21 @@ data class WebhookRule(
                 secretKey = obj.optString("secretKey", ""),
                 maxRetries = obj.optInt("maxRetries", 3),
                 ignoreGroupSummary = obj.optBoolean("ignoreGroupSummary", true),
-                deduplicateMessages = obj.optBoolean("deduplicateMessages", true)
+                deduplicateMessages = obj.optBoolean("deduplicateMessages", true),
+                ignoreOngoing = obj.optBoolean("ignoreOngoing", true),
+                cooldownSeconds = obj.optInt("cooldownSeconds", 0)
             )
         }
     }
 }
 
 object RuleStore {
+    @Volatile
+    private var cachedRules: List<WebhookRule>? = null
+
     fun getRules(context: Context): List<WebhookRule> {
-        val db = AppDatabase.getInstance(context)
+        cachedRules?.let { return it }
+        val db = AppDatabase.getInstance(context.applicationContext)
         val rules = db.getAllRules()
         if (rules.isEmpty()) {
             val defaultList = getDefaultRules()
@@ -92,29 +102,30 @@ object RuleStore {
                 array.put(r.toJson())
             }
             db.saveRulesJson(array.toString())
+            cachedRules = defaultList
             return defaultList
         }
+        cachedRules = rules
         return rules
     }
 
     fun getRulesJson(context: Context): String {
-        val db = AppDatabase.getInstance(context)
-        val jsonStr = db.getRulesJson()
-        if (jsonStr != "[]") {
-            return jsonStr
-        }
-        val defaultList = getDefaultRules()
+        val rules = getRules(context)
         val array = JSONArray()
-        for (r in defaultList) {
+        for (r in rules) {
             array.put(r.toJson())
         }
-        val defaultStr = array.toString()
-        db.saveRulesJson(defaultStr)
-        return defaultStr
+        return array.toString()
     }
 
     fun saveRulesJson(context: Context, jsonStr: String) {
-        AppDatabase.getInstance(context).saveRulesJson(jsonStr)
+        val db = AppDatabase.getInstance(context.applicationContext)
+        db.saveRulesJson(jsonStr)
+        cachedRules = db.getAllRules()
+    }
+
+    fun invalidateCache() {
+        cachedRules = null
     }
 
     private fun getDefaultRules(): List<WebhookRule> {
@@ -124,7 +135,7 @@ object RuleStore {
                 name = "Aturan Gateway Notifikasi",
                 enabled = true,
                 packageName = "*",
-                regexPattern = "", // Empty = Match ALL messages
+                regexPattern = "",
                 regexIgnoreCase = true,
                 webhookUrl = "https://your-domain.com/webhook/endpoint",
                 httpMethod = "POST",
@@ -137,9 +148,10 @@ object RuleStore {
                 secretKey = "",
                 maxRetries = 3,
                 ignoreGroupSummary = true,
-                deduplicateMessages = true
+                deduplicateMessages = true,
+                ignoreOngoing = true,
+                cooldownSeconds = 0
             )
         )
     }
 }
-

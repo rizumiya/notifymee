@@ -1,0 +1,36 @@
+{
+  "format": "notifymee_package_bundle_v2",
+  "export_name": "telegram_bot_gateway.json",
+  "description": "Konfigurasi penerus pesan masuk Telegram lengkap dengan filter sinkronisasi latar belakang.",
+  "package_filter": "org.telegram.messenger",
+  "exported_at": "2026-11-06T17:40:00Z",
+  "rules": [
+    {
+      "id": "preset_tg_gateway_01",
+      "name": "Telegram Message Gateway",
+      "isEnabled": true,
+      "packageFilter": "org.telegram.messenger",
+      "keywordRegex": "",
+      "ignoreCase": true,
+      "webhookUrl": "https://httpbin.org/post",
+      "httpMethod": "POST",
+      "secretKey": "",
+      "customTemplate": "",
+      "maxRetries": 3,
+      "ignoreGroupSummary": true,
+      "deduplicate": true,
+      "ignoreOngoing": true,
+      "cooldownSeconds": 0
+    }
+  ],
+  "blacklists": [
+    {
+      "packageName": "org.telegram.messenger",
+      "pattern": "Updating..."
+    },
+    {
+      "packageName": "org.telegram.messenger",
+      "pattern": "Connecting..."
+    }
+  ]
+}

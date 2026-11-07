@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+*.apk
+*.aab
+
+# Local & temporary files
+local.properties
+.gradle/
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+.vscode/

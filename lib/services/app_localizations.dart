@@ -52,9 +52,10 @@ class I18n {
   // Navigation & General
   String get appTitle => isId ? 'Gateway Webhook Notifikasi' : 'Notification Webhook Gateway';
   String get tabDashboard => 'Dashboard';
-  String get tabRules => isId ? 'Aturan Webhook' : 'Webhook Rules';
-  String get tabLogs => isId ? 'Log Webhook' : 'Webhook Logs';
-  String get tabGuide => isId ? 'Panduan Sistem' : 'System Guide';
+  String get tabRules => isId ? 'Aturan' : 'Rules';
+  String get tabBlacklist => 'Blacklist';
+  String get tabLogs => isId ? 'Log' : 'Logs';
+  String get tabGuide => isId ? 'Panduan' : 'Guide';
 
   // Common Actions
   String get btnCancel => isId ? 'Batal' : 'Cancel';
@@ -347,19 +348,16 @@ class I18n {
   String get btnAddNewBlacklist => isId ? 'Tambah Blacklist Manual' : 'Add Manual Blacklist';
 
   // Background Architecture & Lock App Guide
-  String get guideArchComparisonTitle => isId
-      ? 'Mengapa Notifymee Berbeda dengan WhatsApp / Telegram?'
-      : 'Why Notifymee Differs from WhatsApp / Telegram';
-  String get guideArchComparisonDesc => isId
-      ? 'Aplikasi chatting seperti WhatsApp atau Telegram TIDAK berjalan terus-menerus di memori saat ditutup. Mereka menggunakan Google Play Services (FCM Push Cloud) yang dibangunkan server Google kurang dari 1 detik hanya saat ada pesan masuk.\n\nSebaliknya, Notifymee bertugas membaca notifikasi milik aplikasi lain langsung di dalam sistem HP (On-Device Notification Gateway). Tidak ada server cloud yang tahu apa notifikasi di layar HP Anda selain sistem internal HP itu sendiri. Oleh karena itu, Notifymee wajib mempertahankan koneksi sistem lokal (NotificationListenerService) secara realtime 24/7 di latar belakang.'
-      : 'Chat apps like WhatsApp or Telegram do NOT run continuously in RAM when swiped away. They utilize Google Play Services (FCM Push Cloud) which wakes them up for under a second only when a message arrives.\n\nConversely, Notifymee operates as an On-Device Notification Gateway reading other apps\' notifications directly inside the phone. No cloud server knows what notifications appear on your screen. Therefore, Notifymee must maintain a continuous local listener connection (NotificationListenerService) 24/7 in memory.';
+  String get pressBackAgainToExit => isId
+      ? 'Tekan kembali sekali lagi untuk keluar aplikasi'
+      : 'Press back again to exit the app';
 
   String get guideKeepAliveTitle => isId
       ? 'Panduan: Kunci Notifymee di Layar Aplikasi Berjalan (Recent Apps)'
       : 'Guide: Lock Notifymee in Recent Apps Screen';
   String get guideKeepAliveSubtitle => isId
-      ? 'Jika ingin aplikasi kebal saat dibersihkan dari layar recent apps:'
-      : 'To prevent the app from being stopped when cleaning recent apps:';
+      ? 'Agar aplikasi tetap berjalan saat layar recent apps dibersihkan:'
+      : 'To keep the app running when cleaning recent apps:';
   String get guideLockStep1 => isId
       ? 'Buka layar Recent Apps (daftar aplikasi berjalan / multitasking).'
       : 'Open the Recent Apps / Multitasking screen.';
@@ -370,9 +368,9 @@ class I18n {
       ? 'Ketuk ikon Gembok (Lock 🔒) sampai ikon gembok muncul di pojok kartu.'
       : 'Tap the Padlock icon (Lock 🔒) until the padlock symbol appears on the card.';
   String get guideLockStep4 => isId
-      ? 'Selesai! Notifymee kini tidak akan dibunuh saat tombol "Bersihkan Semua" (Clear All) ditekan.'
+      ? 'Selesai! Notifymee kini tidak akan ikut mati saat tombol "Bersihkan Semua" (Clear All) ditekan.'
       : 'Done! Notifymee will now remain active even when "Clear All" is pressed.';
   String get guideKeepAliveAltNote => isId
-      ? 'Alternatif tanpa mengunci aplikasi: Pastikan izin notifikasi Notifymee di pengaturan HP tetap menyala (boleh disetel Hening/Senyap agar tidak ada pop-up). Notifikasi tersebut berfungsi sebagai jangkar Foreground Service agar sistem Android tidak membunuh layanan gateway.'
-      : 'Alternative without locking: Ensure Notifymee\'s app notification permission remains ON in phone settings (you can set it to Silent so it does not clutter the status bar). This notification serves as a Foreground Service anchor preventing Android from terminating the gateway.';
+      ? 'Alternatif tanpa mengunci aplikasi: Pastikan izin notifikasi Notifymee di pengaturan HP tetap menyala (boleh disetel Hening/Senyap agar tidak ada pop-up). Notifikasi tersebut berfungsi sebagai jangkar Foreground Service agar layanan gateway tidak ikut mati di latar belakang.'
+      : 'Alternative without locking: Ensure Notifymee\'s app notification permission remains ON in phone settings (you can set it to Silent so it does not clutter the status bar). This notification serves as a Foreground Service anchor keeping the gateway active in the background.';
 }

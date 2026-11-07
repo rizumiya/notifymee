@@ -30,14 +30,16 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   int _maxRetries = 3;
   bool _ignoreGroupSummary = true;
   bool _deduplicateMessages = true;
+  bool _ignoreOngoing = true;
+  int _cooldownSeconds = 0;
 
   bool _isTesting = false;
   String? _testResultText;
 
-  // Cached Regex test state
   bool _isRegexMatch = false;
   String _regexMatchMessage = '';
   List<String> _matchedGroups = [];
+  Map<String, String> _matchedNamedGroups = {};
 
   @override
   void initState() {
@@ -58,6 +60,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _maxRetries = r?.maxRetries ?? 3;
     _ignoreGroupSummary = r?.ignoreGroupSummary ?? true;
     _deduplicateMessages = r?.deduplicateMessages ?? true;
+    _ignoreOngoing = r?.ignoreOngoing ?? true;
+    _cooldownSeconds = r?.cooldownSeconds ?? 0;
 
     _evaluateRegex();
   }
@@ -95,6 +99,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         _isRegexMatch = true;
         _regexMatchMessage = i18n.regexMatchAll;
         _matchedGroups = [];
+        _matchedNamedGroups = {};
       });
       return;
     }
@@ -107,16 +112,25 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         for (int i = 1; i <= match.groupCount; i++) {
           groups.add(match.group(i) ?? '');
         }
+        final named = <String, String>{};
+        for (final gName in match.groupNames) {
+          final val = match.namedGroup(gName);
+          if (val != null) {
+            named[gName] = val;
+          }
+        }
         setState(() {
           _isRegexMatch = true;
           _regexMatchMessage = i18n.regexMatchedCount(match.groupCount);
           _matchedGroups = groups;
+          _matchedNamedGroups = named;
         });
       } else {
         setState(() {
           _isRegexMatch = false;
           _regexMatchMessage = i18n.regexNotMatched;
           _matchedGroups = [];
+          _matchedNamedGroups = {};
         });
       }
     } catch (e) {
@@ -124,6 +138,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         _isRegexMatch = false;
         _regexMatchMessage = i18n.regexInvalidError(e);
         _matchedGroups = [];
+        _matchedNamedGroups = {};
       });
     }
   }
@@ -227,6 +242,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       maxRetries: _maxRetries,
       ignoreGroupSummary: _ignoreGroupSummary,
       deduplicateMessages: _deduplicateMessages,
+      ignoreOngoing: _ignoreOngoing,
+      cooldownSeconds: _cooldownSeconds,
     );
 
     final res = await _bridge.testWebhook(
@@ -276,6 +293,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       maxRetries: _maxRetries,
       ignoreGroupSummary: _ignoreGroupSummary,
       deduplicateMessages: _deduplicateMessages,
+      ignoreOngoing: _ignoreOngoing,
+      cooldownSeconds: _cooldownSeconds,
     );
 
     widget.onSave(newRule);
@@ -373,7 +392,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
           const SizedBox(height: 16),
 
-          // SQLite Deduplication & Group Summary Controls
+          // Anti-Spam, Ongoing Filter, Group Summary & Cooldown Controls
           Card(
             elevation: 0,
             color: Colors.teal.shade50.withValues(alpha: 0.5),
@@ -400,6 +419,24 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                   ),
                   const Divider(height: 1),
                   SwitchListTile(
+                    value: _ignoreOngoing,
+                    activeThumbColor: Colors.teal.shade700,
+                    title: Text(
+                      i18n.isId
+                          ? 'Abaikan Notifikasi Berjalan (Ongoing / Progress)'
+                          : 'Ignore Ongoing / Progress Notifications',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      i18n.isId
+                          ? 'Menyaring pemutar musik, unduhan berjalan, dan layanan aktif agar tidak memicu spam webhook.'
+                          : 'Filters media players, active downloads, and foreground services from triggering webhooks.',
+                      style: const TextStyle(fontSize: 11, color: Colors.black87),
+                    ),
+                    onChanged: (val) => setState(() => _ignoreOngoing = val),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
                     value: _deduplicateMessages,
                     activeThumbColor: Colors.teal.shade700,
                     title: Text(
@@ -411,6 +448,28 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                       style: const TextStyle(fontSize: 11, color: Colors.black87),
                     ),
                     onChanged: (val) => setState(() => _deduplicateMessages = val),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: DropdownButtonFormField<int>(
+                      initialValue: _cooldownSeconds,
+                      decoration: InputDecoration(
+                        labelText: i18n.isId
+                            ? 'Jeda Anti-Spam per Aturan (Cooldown)'
+                            : 'Per-Rule Anti-Spam Cooldown',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        DropdownMenuItem(value: 0, child: Text(i18n.isId ? 'Tanpa Cooldown (Real-time)' : 'No Cooldown (Real-time)')),
+                        DropdownMenuItem(value: 5, child: Text(i18n.isId ? '5 Detik' : '5 Seconds')),
+                        DropdownMenuItem(value: 15, child: Text(i18n.isId ? '15 Detik' : '15 Seconds')),
+                        DropdownMenuItem(value: 30, child: Text(i18n.isId ? '30 Detik' : '30 Seconds')),
+                        DropdownMenuItem(value: 60, child: Text(i18n.isId ? '60 Detik (1 Menit)' : '60 Seconds (1 Minute)')),
+                      ],
+                      onChanged: (val) => setState(() => _cooldownSeconds = val ?? 0),
+                    ),
                   ),
                 ],
               ),
@@ -500,6 +559,15 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     return Text(
                       i18n.groupLabel(idx, val),
                       style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.blueAccent),
+                    );
+                  }),
+                ],
+                if (_matchedNamedGroups.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  ..._matchedNamedGroups.entries.map((entry) {
+                    return Text(
+                      '• Named ({{${entry.key}}}): "${entry.value}"',
+                      style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.teal.shade800, fontWeight: FontWeight.w600),
                     );
                   }),
                 ],
@@ -635,7 +703,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
-                  hintText: '{\n  "app": "{{app_name}}",\n  "title": "{{title}}",\n  "message": "{{text}}",\n  "datetime": "{{datetime}}"\n}',
+                  hintText: '{\n  "app": "{{app_name}}",\n  "title": "{{title}}",\n  "message": "{{text}}",\n  "otp": "{{otp}}",\n  "datetime": "{{datetime}}"\n}',
                 ),
               ),
             ],

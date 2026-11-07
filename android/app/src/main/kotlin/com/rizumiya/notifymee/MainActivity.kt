@@ -1,6 +1,5 @@
 package com.rizumiya.notifymee
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -14,22 +13,20 @@ import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.Executors
 import java.util.regex.Pattern
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.rizumiya.notifymee/channel"
     private var methodChannel: MethodChannel? = null
+    private val ioExecutor = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        if (isNotificationServiceEnabled()) {
-            NotificationService.startForegroundService(this)
-            if (!NotificationService.isServiceRunning) {
-                NotificationService.triggerRebind(this)
-            }
-        }
+        ensureGatewayServiceRunning()
 
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel?.setMethodCallHandler { call, result ->
@@ -66,35 +63,46 @@ class MainActivity : FlutterActivity() {
                 "addPackageBlacklist" -> {
                     val pkg = call.argument<String>("packageName") ?: ""
                     val pattern = call.argument<String>("pattern") ?: ""
-                    val success = AppDatabase.getInstance(this).addBlacklist(pkg, pattern)
-                    result.success(success)
+                    ioExecutor.execute {
+                        val success = AppDatabase.getInstance(applicationContext).addBlacklist(pkg, pattern)
+                        runOnUiThread { result.success(success) }
+                    }
                 }
                 "deletePackageBlacklist" -> {
                     val id = call.argument<String>("id") ?: ""
-                    val success = AppDatabase.getInstance(this).deleteBlacklist(id)
-                    result.success(success)
+                    ioExecutor.execute {
+                        val success = AppDatabase.getInstance(applicationContext).deleteBlacklist(id)
+                        runOnUiThread { result.success(success) }
+                    }
                 }
                 "getPackageBlacklist" -> {
                     val pkg = call.argument<String>("packageName") ?: ""
-                    val list = AppDatabase.getInstance(this).getBlacklistForPackage(pkg)
-                    val arr = org.json.JSONArray()
-                    for (item in list) {
-                        arr.put(org.json.JSONObject(item))
+                    ioExecutor.execute {
+                        val list = AppDatabase.getInstance(applicationContext).getBlacklistForPackage(pkg)
+                        val arr = JSONArray()
+                        for (item in list) {
+                            arr.put(JSONObject(item))
+                        }
+                        val json = arr.toString()
+                        runOnUiThread { result.success(json) }
                     }
-                    result.success(arr.toString())
                 }
                 "getAllBlacklist" -> {
-                    val list = AppDatabase.getInstance(this).getAllBlacklist()
-                    val arr = org.json.JSONArray()
-                    for (item in list) {
-                        arr.put(org.json.JSONObject(item))
+                    ioExecutor.execute {
+                        val list = AppDatabase.getInstance(applicationContext).getAllBlacklist()
+                        val arr = JSONArray()
+                        for (item in list) {
+                            arr.put(JSONObject(item))
+                        }
+                        val json = arr.toString()
+                        runOnUiThread { result.success(json) }
                     }
-                    result.success(arr.toString())
                 }
                 "openNotificationSettings" -> {
                     try {
-                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
                         startActivity(intent)
                         result.success(true)
                     } catch (e: Exception) {
@@ -103,18 +111,8 @@ class MainActivity : FlutterActivity() {
                 }
                 "rebindNotificationListener" -> {
                     try {
-                        val component = ComponentName(this, NotificationService::class.java)
-                        packageManager.setComponentEnabledSetting(
-                            component,
-                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                            PackageManager.DONT_KILL_APP
-                        )
-                        packageManager.setComponentEnabledSetting(
-                            component,
-                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                            PackageManager.DONT_KILL_APP
-                        )
-                        NotificationService.triggerRebind(this)
+                        NotificationService.triggerRebind(applicationContext, forceComponentToggle = true)
+                        NotificationService.startForegroundService(applicationContext)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("ERROR", e.message, null)
@@ -129,69 +127,97 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "checkBatteryOptimization" -> {
-                    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                    val isIgnoring = pm.isIgnoringBatteryOptimizations(packageName)
-                    result.success(isIgnoring)
+                    result.success(isIgnoringBatteryOptimizations())
                 }
                 "requestIgnoreBatteryOptimization" -> {
-                    try {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:$packageName")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(intent)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("ERROR", e.message, null)
-                    }
+                    result.success(requestIgnoreBatteryOptimizationsSafely())
                 }
                 "getRules" -> {
-                    val rulesJson = RuleStore.getRulesJson(this)
-                    result.success(rulesJson)
+                    ioExecutor.execute {
+                        val rulesJson = RuleStore.getRulesJson(applicationContext)
+                        runOnUiThread { result.success(rulesJson) }
+                    }
                 }
                 "saveRules" -> {
                     val rulesJson = call.argument<String>("rulesJson") ?: "[]"
-                    RuleStore.saveRulesJson(this, rulesJson)
-                    result.success(true)
+                    ioExecutor.execute {
+                        RuleStore.saveRulesJson(applicationContext, rulesJson)
+                        runOnUiThread { result.success(true) }
+                    }
                 }
                 "exportDatabaseJson" -> {
-                    val exportJson = AppDatabase.getInstance(this).exportFullConfigJson()
-                    result.success(exportJson)
+                    ioExecutor.execute {
+                        val exportJson = AppDatabase.getInstance(applicationContext).exportFullConfigJson()
+                        runOnUiThread { result.success(exportJson) }
+                    }
                 }
                 "importDatabaseJson" -> {
                     val jsonStr = call.argument<String>("jsonStr") ?: "{}"
-                    val success = AppDatabase.getInstance(this).importFullConfigJson(jsonStr)
-                    result.success(success)
+                    ioExecutor.execute {
+                        val success = AppDatabase.getInstance(applicationContext).importFullConfigJson(jsonStr)
+                        runOnUiThread { result.success(success) }
+                    }
                 }
                 "getLogs" -> {
-                    val logsJson = NotificationLogStore.getLogsJson(this)
-                    result.success(logsJson)
+                    ioExecutor.execute {
+                        val logsJson = NotificationLogStore.getLogsJson(applicationContext)
+                        runOnUiThread { result.success(logsJson) }
+                    }
                 }
                 "clearLogs" -> {
-                    NotificationLogStore.clearLogs(this)
-                    result.success(true)
+                    ioExecutor.execute {
+                        NotificationLogStore.clearLogs(applicationContext)
+                        runOnUiThread { result.success(true) }
+                    }
+                }
+                "retryWebhookLog" -> {
+                    val logId = call.argument<String>("logId") ?: ""
+                    WebhookDispatcher.retryLogById(applicationContext, logId) { success, statusCode, message ->
+                        result.success(
+                            mapOf(
+                                "success" to success,
+                                "statusCode" to statusCode,
+                                "message" to message
+                            )
+                        )
+                    }
+                }
+                "retryAllFailedLogs" -> {
+                    WebhookDispatcher.retryAllFailedLogs(applicationContext) { successCount, totalTried ->
+                        result.success(
+                            mapOf(
+                                "successCount" to successCount,
+                                "totalTried" to totalTried
+                            )
+                        )
+                    }
                 }
                 "getInstalledApps" -> {
-                    val apps = getInstalledAppList()
-                    result.success(apps)
+                    ioExecutor.execute {
+                        val apps = getInstalledAppList()
+                        runOnUiThread { result.success(apps) }
+                    }
                 }
                 "simulateNotification" -> {
                     val pkg = call.argument<String>("packageName") ?: "org.telegram.messenger"
                     val title = call.argument<String>("title") ?: "Pesan Baru"
                     val text = call.argument<String>("text") ?: "Halo, ini notifikasi uji coba gateway."
-                    simulateNotificationProcessing(pkg, title, text)
-                    result.success(true)
+                    ioExecutor.execute {
+                        simulateNotificationProcessing(pkg, title, text)
+                        runOnUiThread { result.success(true) }
+                    }
                 }
                 "testWebhook" -> {
                     val ruleJsonStr = call.argument<String>("ruleJson") ?: ""
                     val title = call.argument<String>("title") ?: "Test Notifikasi"
                     val text = call.argument<String>("text") ?: "Halo, ini pesan uji coba endpoint webhook."
-                    
+
                     try {
                         val ruleObj = JSONObject(ruleJsonStr)
                         val rule = WebhookRule.fromJson(ruleObj)
-                        
+
                         val groups = mutableListOf<String>()
+                        val namedGroups = mutableMapOf<String, String>()
                         if (rule.regexPattern.isNotBlank()) {
                             val flags = if (rule.regexIgnoreCase) Pattern.CASE_INSENSITIVE or Pattern.MULTILINE else Pattern.MULTILINE
                             val p = Pattern.compile(rule.regexPattern, flags)
@@ -200,6 +226,14 @@ class MainActivity : FlutterActivity() {
                                 for (i in 1..m.groupCount()) {
                                     groups.add(m.group(i) ?: "")
                                 }
+                                val nameMatcher = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9]*)>").matcher(rule.regexPattern)
+                                while (nameMatcher.find()) {
+                                    val gName = nameMatcher.group(1) ?: continue
+                                    try {
+                                        val gVal = m.group(gName)
+                                        if (gVal != null) namedGroups[gName] = gVal
+                                    } catch (_: Exception) {}
+                                }
                             }
                         }
 
@@ -207,7 +241,7 @@ class MainActivity : FlutterActivity() {
                         val appLabel = getAppLabel(targetPkg)
 
                         WebhookDispatcher.dispatch(
-                            context = this,
+                            context = applicationContext,
                             rule = rule,
                             packageName = targetPkg,
                             appName = appLabel,
@@ -217,14 +251,16 @@ class MainActivity : FlutterActivity() {
                             subText = "",
                             fullContent = "$title $text",
                             timestamp = System.currentTimeMillis(),
-                            regexMatches = groups
+                            regexMatches = groups,
+                            namedRegexMatches = namedGroups
                         ) { success, code, msg ->
-                            val res = mapOf(
-                                "success" to success,
-                                "statusCode" to code,
-                                "message" to msg
+                            result.success(
+                                mapOf(
+                                    "success" to success,
+                                    "statusCode" to code,
+                                    "message" to msg
+                                )
                             )
-                            result.success(res)
                         }
                     } catch (e: Exception) {
                         result.error("ERROR", e.message, null)
@@ -234,7 +270,6 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // Live notification update listener to notify Flutter UI immediately
         WebhookDispatcher.onLogUpdated = {
             runOnUiThread {
                 methodChannel?.invokeMethod("onNewLogEvent", null)
@@ -244,10 +279,21 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        ensureGatewayServiceRunning()
+    }
+
+    override fun onDestroy() {
+        if (WebhookDispatcher.onLogUpdated != null) {
+            WebhookDispatcher.onLogUpdated = null
+        }
+        super.onDestroy()
+    }
+
+    private fun ensureGatewayServiceRunning() {
         if (isNotificationServiceEnabled()) {
-            NotificationService.startForegroundService(this)
+            NotificationService.startForegroundService(applicationContext)
             if (!NotificationService.isServiceRunning) {
-                NotificationService.triggerRebind(this)
+                NotificationService.requestSafeRebind(applicationContext)
             }
         }
     }
@@ -255,6 +301,35 @@ class MainActivity : FlutterActivity() {
     private fun isNotificationServiceEnabled(): Boolean {
         val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(this)
         return enabledPackages.contains(packageName)
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun requestIgnoreBatteryOptimizationsSafely(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        if (isIgnoringBatteryOptimizations()) return true
+
+        return try {
+            val directIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(directIntent)
+            true
+        } catch (e: Exception) {
+            try {
+                val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(fallbackIntent)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     private fun getInstalledAppList(): List<Map<String, Any>> {
@@ -269,11 +344,13 @@ class MainActivity : FlutterActivity() {
 
             if (pkg == packageName) continue
 
-            list.add(mapOf(
-                "appName" to appName,
-                "packageName" to pkg,
-                "isSystem" to isSystem
-            ))
+            list.add(
+                mapOf(
+                    "appName" to appName,
+                    "packageName" to pkg,
+                    "isSystem" to isSystem
+                )
+            )
         }
 
         list.sortWith(compareBy({ it["isSystem"] as Boolean }, { (it["appName"] as String).lowercase() }))
@@ -293,7 +370,7 @@ class MainActivity : FlutterActivity() {
         val appName = getAppLabel(pkg)
         val fullContent = "$title $text".trim()
         val timestamp = System.currentTimeMillis()
-        val rules = RuleStore.getRules(this)
+        val rules = RuleStore.getRules(applicationContext)
         var anyMatched = false
 
         for (rule in rules) {
@@ -305,7 +382,7 @@ class MainActivity : FlutterActivity() {
             val appLower = appName.lowercase()
 
             val pkgMatch = rulePkg.isBlank() || rulePkg == "*" ||
-                    targets.any { it == pkgLower || pkgLower.contains(it) || it == appLower || appLower.contains(it) }
+                targets.any { it == pkgLower || pkgLower.contains(it) || it == appLower || appLower.contains(it) }
 
             if (!pkgMatch) continue
 
@@ -321,8 +398,17 @@ class MainActivity : FlutterActivity() {
                         for (i in 1..matcher.groupCount()) {
                             groups.add(matcher.group(i) ?: "")
                         }
+                        val namedGroups = mutableMapOf<String, String>()
+                        val nameMatcher = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9]*)>").matcher(regex)
+                        while (nameMatcher.find()) {
+                            val gName = nameMatcher.group(1) ?: continue
+                            try {
+                                val gVal = matcher.group(gName)
+                                if (gVal != null) namedGroups[gName] = gVal
+                            } catch (_: Exception) {}
+                        }
                         WebhookDispatcher.dispatch(
-                            context = this,
+                            context = applicationContext,
                             rule = rule,
                             packageName = pkg,
                             appName = appName,
@@ -332,7 +418,8 @@ class MainActivity : FlutterActivity() {
                             subText = "",
                             fullContent = fullContent,
                             timestamp = timestamp,
-                            regexMatches = groups
+                            regexMatches = groups,
+                            namedRegexMatches = namedGroups
                         )
                     }
                 } catch (e: Exception) {
@@ -341,7 +428,7 @@ class MainActivity : FlutterActivity() {
             } else {
                 anyMatched = true
                 WebhookDispatcher.dispatch(
-                    context = this,
+                    context = applicationContext,
                     rule = rule,
                     packageName = pkg,
                     appName = appName,
@@ -370,7 +457,7 @@ class MainActivity : FlutterActivity() {
                 latencyMs = 0,
                 payloadSent = ""
             )
-            NotificationLogStore.addLog(this, unhandledLog)
+            NotificationLogStore.addLog(applicationContext, unhandledLog, status = "SKIPPED")
             WebhookDispatcher.onLogUpdated?.invoke()
         }
     }

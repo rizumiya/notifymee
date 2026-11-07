@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="2160" viewBox="0 0 1080 2160">
+    <rect width="1080" height="2160" fill="#F5FAF9"/>
+    <!-- Status Bar -->
+    <text x="48" y="48" font-family="sans-serif" font-size="24" font-weight="bold" fill="#0F2926">09:41</text>
+    <rect x="135" y="22" width="34" height="34" rx="8" fill="#00695C"/>
+    <text x="152" y="47" font-family="sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF" text-anchor="middle">N</text>
+    <text x="1030" y="48" font-family="sans-serif" font-size="24" font-weight="bold" fill="#0F2926" text-anchor="end">5G  100%</text>
+
+    <!-- App Header Bar -->
+    <rect x="40" y="82" width="70" height="70" rx="18" fill="#E0F2F1" stroke="#B2DFDB" stroke-width="2"/>
+    <text x="75" y="130" font-family="sans-serif" font-size="36" font-weight="bold" fill="#00695C" text-anchor="middle">N</text>
+    <text x="128" y="116" font-family="sans-serif" font-size="34" font-weight="bold" fill="#0F2926">Notifymee</text>
+    <text x="128" y="146" font-family="sans-serif" font-size="19" fill="#546E6A">Android Notification Webhook Gateway</text>
+
+    <rect x="810" y="92" width="125" height="50" rx="14" fill="#E0F2F1" stroke="#80CBC4" stroke-width="2"/>
+    <text x="872" y="125" font-family="sans-serif" font-size="22" font-weight="bold" fill="#00695C" text-anchor="middle">ID | EN</text>
+    <rect x="950" y="92" width="90" height="50" rx="14" fill="#E0F2F1" stroke="#80CBC4" stroke-width="2"/>
+    <text x="995" y="126" font-family="sans-serif" font-size="22" font-weight="bold" fill="#00695C" text-anchor="middle">Setup</text>
+
+    
+    <!-- Hero Gateway Card -->
+    <rect x="40" y="180" width="1000" height="280" rx="34" fill="#004D40"/>
+    <circle cx="110" cy="255" r="38" fill="#00897B"/>
+    <text x="110" y="268" font-family="sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF" text-anchor="middle">OK</text>
+    <text x="172" y="245" font-family="sans-serif" font-size="33" font-weight="bold" fill="#FFFFFF">Gateway Aktif &amp; Memantau</text>
+    <text x="172" y="285" font-family="sans-serif" font-size="22" fill="#D2F2EE">Mendengarkan notifikasi real-time 24/7 di latar belakang</text>
+    <text x="172" y="316" font-family="sans-serif" font-size="22" fill="#D2F2EE">(START_STICKY + Foreground Anchor + WakeLock).</text>
+
+    <rect x="72" y="355" width="445" height="74" rx="20" fill="#FFFFFF"/>
+    <text x="294" y="401" font-family="sans-serif" font-size="24" font-weight="bold" fill="#004D40" text-anchor="middle">Panduan Pengaturan</text>
+    <rect x="540" y="355" width="468" height="74" rx="20" fill="#00796B"/>
+    <text x="774" y="401" font-family="sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Segarkan Listener</text>
+
+    <!-- 2x2 Pastel Stat Cards -->
+    <rect x="40" y="490" width="486" height="150" rx="26" fill="#FFFFFF" stroke="#B2DFDB" stroke-width="2"/>
+    <rect x="66" y="518" width="84" height="94" rx="20" fill="#E0F2F1"/>
+    <text x="108" y="578" font-family="sans-serif" font-size="34" font-weight="bold" fill="#00695C" text-anchor="middle">4</text>
+    <text x="176" y="555" font-family="sans-serif" font-size="38" font-weight="bold" fill="#00695C">4 Aturan</text>
+    <text x="176" y="596" font-family="sans-serif" font-size="23" font-weight="bold" fill="#546E6A">Aturan Webhook Aktif</text>
+
+    <rect x="554" y="490" width="486" height="150" rx="26" fill="#FFFFFF" stroke="#B2DFDB" stroke-width="2"/>
+    <rect x="580" y="518" width="84" height="94" rx="20" fill="#E3F2FD"/>
+    <text x="622" y="578" font-family="sans-serif" font-size="30" font-weight="bold" fill="#1565C0" text-anchor="middle">IN</text>
+    <text x="690" y="555" font-family="sans-serif" font-size="38" font-weight="bold" fill="#1565C0">128</text>
+    <text x="690" y="596" font-family="sans-serif" font-size="23" font-weight="bold" fill="#546E6A">Notifikasi Masuk</text>
+
+    <rect x="40" y="664" width="486" height="150" rx="26" fill="#FFFFFF" stroke="#B2DFDB" stroke-width="2"/>
+    <rect x="66" y="692" width="84" height="94" rx="20" fill="#E8F5E9"/>
+    <text x="108" y="752" font-family="sans-serif" font-size="28" font-weight="bold" fill="#2E7D32" text-anchor="middle">2xx</text>
+    <text x="176" y="729" font-family="sans-serif" font-size="38" font-weight="bold" fill="#2E7D32">124</text>
+    <text x="176" y="770" font-family="sans-serif" font-size="23" font-weight="bold" fill="#546E6A">Sukses Terkirim (2xx)</text>
+
+    <rect x="554" y="664" width="486" height="150" rx="26" fill="#FFFFFF" stroke="#B2DFDB" stroke-width="2"/>
+    <rect x="580" y="692" width="84" height="94" rx="20" fill="#FFF8E1"/>
+    <text x="622" y="752" font-family="sans-serif" font-size="26" font-weight="bold" fill="#E65100" text-anchor="middle">SKIP</text>
+    <text x="690" y="729" font-family="sans-serif" font-size="38" font-weight="bold" fill="#E65100">4</text>
+    <text x="690" y="770" font-family="sans-serif" font-size="23" font-weight="bold" fill="#546E6A">Dilewati / Blacklist</text>
+
+    <!-- System Health Card -->
+    <rect x="40" y="844" width="1000" height="310" rx="28" fill="#FFFFFF" stroke="#B2DFDB" stroke-width="2"/>
+    <text x="72" y="896" font-family="sans-serif" font-size="28" font-weight="bold" fill="#0F2926">Kesehatan &amp; Izin Sistem Android</text>
+
+    <text x="72" y="962" font-family="sans-serif" font-size="24" font-weight="bold" fill="#0F2926">Akses Notifikasi Sistem (Listener)</text>
+    <rect x="750" y="928" width="258" height="48" rx="14" fill="#E8F5E9"/>
+    <text x="879" y="960" font-family="sans-serif" font-size="21" font-weight="bold" fill="#2E7D32" text-anchor="middle">Diizinkan</text>
+
+    <text x="72" y="1032" font-family="sans-serif" font-size="24" font-weight="bold" fill="#0F2926">Optimasi Baterai (Doze Mode)</text>
+    <rect x="750" y="998" width="258" height="48" rx="14" fill="#E8F5E9"/>
+    <text x="879" y="1030" font-family="sans-serif" font-size="21" font-weight="bold" fill="#2E7D32" text-anchor="middle">Tidak Dibatasi</text>
+
+    <text x="72" y="1102" font-family="sans-serif" font-size="24" font-weight="bold" fill="#0F2926">Jangkar Notifikasi Foreground</text>
+    <rect x="750" y="1068" width="258" height="48" rx="14" fill="#E0F2F1"/>
+    <text x="879" y="1100" font-family="sans-serif" font-size="21" font-weight="bold" fill="#004D40" text-anchor="middle">Aktif 24/7</text>
+
+    <!-- Recent Activity -->
+    <text x="40" y="1210" font-family="sans-serif" font-size="28" font-weight="bold" fill="#0F2926">Aktivitas Webhook Terakhir</text>
+    <text x="1040" y="1210" font-family="sans-serif" font-size="24" font-weight="bold" fill="#00695C" text-anchor="end">Lihat Semua Log</text>
+
+    <rect x="40" y="1238" width="1000" height="160" rx="24" fill="#FFFFFF" stroke="#DCEBE8" stroke-width="2"/>
+    <text x="72" y="1282" font-family="sans-serif" font-size="25" font-weight="bold" fill="#0F2926">WhatsApp • Budi Santoso</text>
+    <text x="72" y="1322" font-family="sans-serif" font-size="22" fill="#546E6A">Halo, pembayaran QRIS Rp 250.000 sudah masuk ya!</text>
+    <text x="72" y="1364" font-family="sans-serif" font-size="20" font-weight="bold" fill="#00695C">HTTP 200 • 142 ms • Forward Pesan WhatsApp</text>
+    <rect x="810" y="1252" width="198" height="46" rx="12" fill="#E8F5E9"/>
+    <text x="909" y="1282" font-family="sans-serif" font-size="19" font-weight="bold" fill="#2E7D32" text-anchor="middle">DISPATCHED</text>
+
+    <rect x="40" y="1420" width="1000" height="160" rx="24" fill="#FFFFFF" stroke="#DCEBE8" stroke-width="2"/>
+    <text x="72" y="1464" font-family="sans-serif" font-size="25" font-weight="bold" fill="#0F2926">DANA • Info Mutasi QRIS</text>
+    <text x="72" y="1504" font-family="sans-serif" font-size="22" fill="#546E6A">Pembayaran QRIS sebesar Rp 250.000 berhasil diterima.</text>
+    <text x="72" y="1546" font-family="sans-serif" font-size="20" font-weight="bold" fill="#00695C">HTTP 200 • 118 ms • Mutasi Pembayaran QRIS</text>
+    <rect x="810" y="1434" width="198" height="46" rx="12" fill="#E8F5E9"/>
+    <text x="909" y="1464" font-family="sans-serif" font-size="19" font-weight="bold" fill="#2E7D32" text-anchor="middle">DISPATCHED</text>
+
+    <rect x="40" y="1602" width="1000" height="160" rx="24" fill="#FFFFFF" stroke="#DCEBE8" stroke-width="2"/>
+    <text x="72" y="1646" font-family="sans-serif" font-size="25" font-weight="bold" fill="#0F2926">WhatsApp • Sistem</text>
+    <text x="72" y="1686" font-family="sans-serif" font-size="22" fill="#546E6A">Memeriksa pesan baru...</text>
+    <text x="72" y="1728" font-family="sans-serif" font-size="20" font-weight="bold" fill="#E65100">Diabaikan otomatis oleh Blacklist Kata Kunci</text>
+    <rect x="810" y="1616" width="198" height="46" rx="12" fill="#FFF8E1"/>
+    <text x="909" y="1646" font-family="sans-serif" font-size="19" font-weight="bold" fill="#E65100" text-anchor="middle">SKIPPED</text>
+
+    <rect x="40" y="1784" width="1000" height="160" rx="24" fill="#FFFFFF" stroke="#DCEBE8" stroke-width="2"/>
+    <text x="72" y="1828" font-family="sans-serif" font-size="25" font-weight="bold" fill="#0F2926">Telegram • AuthBot</text>
+    <text x="72" y="1868" font-family="sans-serif" font-size="22" fill="#546E6A">Kode verifikasi OTP login Anda adalah 849201</text>
+    <text x="72" y="1910" font-family="sans-serif" font-size="20" font-weight="bold" fill="#00695C">HTTP 200 • 96 ms • Ekstraktor Kode OTP</text>
+    <rect x="810" y="1798" width="198" height="46" rx="12" fill="#E8F5E9"/>
+    <text x="909" y="1828" font-family="sans-serif" font-size="19" font-weight="bold" fill="#2E7D32" text-anchor="middle">DISPATCHED</text>
+
+
+    <!-- Bottom Navigation (5 Tabs) -->
+    <rect x="0" y="1985" width="1080" height="175" fill="#FFFFFF"/>
+    <line x1="0" y1="1985" x2="1080" y2="1985" stroke="#D7E8E5" stroke-width="2"/>
+    
+            <rect x="34" y="2005" width="148" height="54" rx="27" fill="#B2DFDB"/>
+            <circle cx="108" cy="2032" r="12" fill="#004D40"/>
+            <text x="108" y="2088" font-family="sans-serif" font-size="22" font-weight="bold" fill="#004D40" text-anchor="middle">Dashboard</text>
+            
+            <circle cx="324" cy="2032" r="10" fill="#607D8B"/>
+            <text x="324" y="2088" font-family="sans-serif" font-size="21" fill="#607D8B" text-anchor="middle">Aturan</text>
+            
+            <circle cx="540" cy="2032" r="10" fill="#607D8B"/>
+            <text x="540" y="2088" font-family="sans-serif" font-size="21" fill="#607D8B" text-anchor="middle">Blacklist</text>
+            
+            <circle cx="756" cy="2032" r="10" fill="#607D8B"/>
+            <text x="756" y="2088" font-family="sans-serif" font-size="21" fill="#607D8B" text-anchor="middle">Log</text>
+            
+            <circle cx="972" cy="2032" r="10" fill="#607D8B"/>
+            <text x="972" y="2088" font-family="sans-serif" font-size="21" fill="#607D8B" text-anchor="middle">Panduan</text>
+            
+    <rect x="450" y="2130" width="180" height="10" rx="5" fill="#B0C4C1"/>
+</svg>

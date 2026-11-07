@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import '../models/notification_log.dart';
 import '../services/app_localizations.dart';
 import '../services/native_bridge.dart';
@@ -18,6 +16,7 @@ class _LogsScreenState extends State<LogsScreen> {
   final NativeBridge _bridge = NativeBridge();
   List<NotificationLog> _logs = [];
   bool _isLoading = true;
+  bool _isBatchRetrying = false;
   String _filter = 'ALL'; // ALL, SUCCESS, FAILED, SKIPPED
   String _searchQuery = '';
 
@@ -48,6 +47,28 @@ class _LogsScreenState extends State<LogsScreen> {
         _logs = logs;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _retryAllFailed() async {
+    final i18n = I18n.of(context);
+    setState(() => _isBatchRetrying = true);
+    final stats = await _bridge.retryAllFailedLogs();
+    await _loadLogs();
+    if (mounted) {
+      setState(() => _isBatchRetrying = false);
+      final ok = stats['successCount'] ?? 0;
+      final total = stats['totalTried'] ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: ok > 0 ? Colors.teal.shade800 : Colors.orange.shade800,
+          content: Text(
+            i18n.isId
+                ? 'Kirim ulang selesai: $ok/$total log gagal berhasil terkirim!'
+                : 'Batch retry finished: $ok/$total failed logs succeeded!',
+          ),
+        ),
+      );
     }
   }
 
@@ -87,6 +108,7 @@ class _LogsScreenState extends State<LogsScreen> {
   @override
   Widget build(BuildContext context) {
     final i18n = I18n.of(context);
+    final failedCount = _logs.where((l) => l.isFailed).length;
 
     final filtered = _logs.where((l) {
       if (_filter == 'SUCCESS' && !l.isSuccess) return false;
@@ -108,6 +130,14 @@ class _LogsScreenState extends State<LogsScreen> {
       appBar: AppBar(
         title: Text(i18n.logsTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         actions: [
+          if (failedCount > 0)
+            IconButton(
+              tooltip: i18n.isId ? 'Kirim Ulang Semua Log Gagal ($failedCount)' : 'Retry All Failed Logs ($failedCount)',
+              icon: _isBatchRetrying
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.replay_circle_filled, color: Colors.teal),
+              onPressed: _isBatchRetrying ? null : _retryAllFailed,
+            ),
           IconButton(
             tooltip: i18n.btnManageBlacklist,
             icon: const Icon(Icons.block_outlined, color: Colors.deepOrange),
@@ -156,7 +186,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
-                  '${i18n.filterFailed} (${_logs.where((l) => l.isFailed).length})',
+                  '${i18n.filterFailed} ($failedCount)',
                   'FAILED',
                   color: Colors.red,
                 ),
@@ -376,8 +406,10 @@ class LogDetailSheet extends StatefulWidget {
 }
 
 class _LogDetailSheetState extends State<LogDetailSheet> {
+  final NativeBridge _bridge = NativeBridge();
   bool _isRetrying = false;
   String? _retryResult;
+  bool _retrySucceeded = false;
   String? _blacklistFeedback;
 
   Future<void> _retryWebhook() async {
@@ -392,31 +424,21 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
       _retryResult = null;
     });
 
-    try {
-      final uri = Uri.parse(webhookUrl);
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: widget.log.payloadSent.isNotEmpty
-            ? widget.log.payloadSent
-            : jsonEncode({
-                'event': 'notification_retry',
-                'title': widget.log.title,
-                'text': widget.log.text,
-                'package': widget.log.packageName,
-              }),
-      ).timeout(const Duration(seconds: 15));
+    // Execute retry via Native Android engine (preserves HMAC signature, custom headers, and updates SQLite status)
+    final res = await _bridge.retryWebhookLog(widget.log.id);
+    final success = res['success'] == true;
+    final code = res['statusCode'] ?? 0;
+    final msg = res['message']?.toString() ?? '';
 
+    if (mounted) {
       setState(() {
         _isRetrying = false;
-        _retryResult = 'Resent! HTTP ${response.statusCode}\nResponse: ${response.body}';
+        _retrySucceeded = success;
+        _retryResult = success
+            ? 'Sukses dikirim ulang! (HTTP $code)\nResponse: $msg'
+            : 'Gagal mengirim ulang (HTTP $code): $msg';
       });
       widget.onRefreshLogs();
-    } catch (e) {
-      setState(() {
-        _isRetrying = false;
-        _retryResult = 'Failed to resend: $e';
-      });
     }
   }
 
@@ -525,14 +547,14 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: log.isSuccess
+                    color: (log.isSuccess || _retrySucceeded)
                         ? Colors.teal.shade50
                         : log.isFailed
                             ? Colors.red.shade50
                             : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: log.isSuccess
+                      color: (log.isSuccess || _retrySucceeded)
                           ? Colors.teal.shade200
                           : log.isFailed
                               ? Colors.red.shade200
@@ -542,12 +564,12 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                   child: Row(
                     children: [
                       Icon(
-                        log.isSuccess
+                        (log.isSuccess || _retrySucceeded)
                             ? Icons.check_circle
                             : log.isFailed
                                 ? Icons.error
                                 : Icons.info_outline,
-                        color: log.isSuccess
+                        color: (log.isSuccess || _retrySucceeded)
                             ? Colors.teal
                             : log.isFailed
                                 ? Colors.red
@@ -559,8 +581,8 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              log.isSuccess
-                                  ? i18n.dispatchedSuccess(log.httpStatus)
+                              (log.isSuccess || _retrySucceeded)
+                                  ? i18n.dispatchedSuccess(log.httpStatus > 0 ? log.httpStatus : 200)
                                   : log.isFailed
                                       ? i18n.dispatchFailed
                                       : i18n.notificationSkipped,
@@ -568,7 +590,7 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                             ),
                             if (log.latencyMs > 0)
                               Text(i18n.latencyLabel(log.latencyMs), style: const TextStyle(fontSize: 11)),
-                            if (log.errorMessage.isNotEmpty)
+                            if (log.errorMessage.isNotEmpty && !_retrySucceeded)
                               Text(i18n.errorMessageLabel(log.errorMessage), style: const TextStyle(fontSize: 11, color: Colors.red)),
                           ],
                         ),
@@ -662,21 +684,6 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                           i18n.blacklistNoticeDesc,
                           style: TextStyle(fontSize: 11, color: Colors.teal.shade800),
                         ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            style: TextButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              foregroundColor: Colors.teal.shade900,
-                            ),
-                            icon: const Icon(Icons.list_alt, size: 16),
-                            label: Text(i18n.btnManageBlacklist, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                            onPressed: () {
-                              BlacklistManagerSheet.show(context, initialPackageFilter: log.packageName);
-                            },
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -687,7 +694,8 @@ class _LogDetailSheetState extends State<LogDetailSheet> {
                     _retryResult!,
                     style: TextStyle(
                       fontSize: 11,
-                      color: _retryResult!.contains('Sukses') || _retryResult!.contains('Resent') ? Colors.teal : Colors.red,
+                      fontWeight: FontWeight.w600,
+                      color: _retrySucceeded ? Colors.teal : Colors.red,
                     ),
                   ),
                 ],

@@ -142,49 +142,6 @@ class IosInfoScreen extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Card: Mengapa Berbeda dengan WhatsApp / Telegram?
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.indigo.shade100),
-            ),
-            elevation: 1,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.indigo.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.cloud_sync_outlined, color: Colors.indigo, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          i18n.guideArchComparisonTitle,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.indigo),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    i18n.guideArchComparisonDesc,
-                    style: const TextStyle(fontSize: 12.5, height: 1.45, color: Colors.black87),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
           // Alert Card: Mengapa iOS berbeda?
           Card(
             color: Colors.amber.shade50,

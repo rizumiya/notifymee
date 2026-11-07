@@ -3,30 +3,41 @@ package com.rizumiya.notifymee
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
 
 class BootReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "BootReceiver"
+        private val ALLOWED_ACTIONS = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            "com.rizumiya.notifymee.ACTION_RESURRECT_SERVICE"
+        )
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null) return
-        Log.i(TAG, "BootReceiver received action: ${intent?.action}. Ensuring NotificationService is active...")
+        val action = intent?.action ?: return
+        if (action !in ALLOWED_ACTIONS) return
 
-        NotificationService.triggerRebind(context)
+        val appContext = context.applicationContext
+        val isListenerPermGranted = NotificationManagerCompat
+            .getEnabledListenerPackages(appContext)
+            .contains(appContext.packageName)
 
-        try {
-            val serviceIntent = Intent(context, NotificationService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start NotificationService from BootReceiver: ${e.message}")
+        if (!isListenerPermGranted) {
+            Log.w(TAG, "BootReceiver ($action): Notification listener permission not granted yet.")
+            return
         }
+
+        Log.i(TAG, "BootReceiver received $action. Ensuring NotificationService is bound and foregrounded...")
+
+        if (!NotificationService.isServiceRunning) {
+            NotificationService.requestSafeRebind(appContext)
+        }
+        NotificationService.startForegroundService(appContext)
     }
 }
-

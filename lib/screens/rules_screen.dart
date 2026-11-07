@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/webhook_rule.dart';
@@ -17,6 +18,110 @@ class _RulesScreenState extends State<RulesScreen> {
   final NativeBridge _bridge = NativeBridge();
   List<WebhookRule> _rules = [];
   bool _isLoading = true;
+
+  static const List<Map<String, String>> _builtInPresets = [
+    {
+      'fileName': 'whatsapp_chat_dan_antispam.json',
+      'title': 'WhatsApp Chat + Anti-Spam Lengkap',
+      'packageName': 'com.whatsapp',
+      'json': '''{
+  "schema": "notifymee_package_bundle_v2",
+  "export_name": "whatsapp_chat_dan_antispam.json",
+  "package_filter": "com.whatsapp",
+  "rules": [
+    {
+      "id": "preset_wa_chat_01",
+      "name": "Forward Pesan WhatsApp (Tanpa Spam)",
+      "enabled": true,
+      "package_name": "com.whatsapp",
+      "regex_pattern": "",
+      "regex_ignore_case": true,
+      "webhook_url": "https://httpbin.org/post",
+      "http_method": "POST",
+      "custom_payload": "",
+      "send_only_if_matched": false,
+      "secret_key": "",
+      "max_retries": 3,
+      "ignore_group_summary": true,
+      "deduplicate_messages": true,
+      "ignore_ongoing": true,
+      "cooldown_seconds": 0
+    }
+  ],
+  "blacklists": [
+    { "package_name": "com.whatsapp", "pattern": "Memeriksa pesan baru" },
+    { "package_name": "com.whatsapp", "pattern": "Checking for new messages" },
+    { "package_name": "com.whatsapp", "pattern": "WhatsApp Web sedang aktif" },
+    { "package_name": "com.whatsapp", "pattern": "Mencadangkan pesan" }
+  ]
+}'''
+    },
+    {
+      'fileName': 'mutasi_qris_dana_bca_gopay.json',
+      'title': 'Mutasi Pembayaran QRIS / Bank / E-Wallet',
+      'packageName': 'id.dana, com.bca, com.gojek.app',
+      'json': '''{
+  "schema": "notifymee_package_bundle_v2",
+  "export_name": "mutasi_qris_dana_bca_gopay.json",
+  "package_filter": "id.dana, com.bca, com.gojek.app",
+  "rules": [
+    {
+      "id": "preset_qris_mutasi_01",
+      "name": "Mutasi Pembayaran QRIS & Transfer",
+      "enabled": true,
+      "package_name": "id.dana, com.bca, com.gojek.app, id.co.bri.brimo, com.livin.mandiri",
+      "regex_pattern": "(?:Rp|IDR)[\\\\s.]*([0-9.,]+)",
+      "regex_ignore_case": true,
+      "webhook_url": "https://httpbin.org/post",
+      "http_method": "POST",
+      "custom_payload": "",
+      "send_only_if_matched": true,
+      "secret_key": "",
+      "max_retries": 5,
+      "ignore_group_summary": true,
+      "deduplicate_messages": true,
+      "ignore_ongoing": true,
+      "cooldown_seconds": 0
+    }
+  ],
+  "blacklists": [
+    { "package_name": "id.dana", "pattern": "Promo" },
+    { "package_name": "com.gojek.app", "pattern": "Diskon" }
+  ]
+}'''
+    },
+    {
+      'fileName': 'otp_verifikasi_universal.json',
+      'title': 'Ekstraktor Kode OTP Universal (4-8 Digit)',
+      'packageName': '*',
+      'json': '''{
+  "schema": "notifymee_package_bundle_v2",
+  "export_name": "otp_verifikasi_universal.json",
+  "package_filter": "*",
+  "rules": [
+    {
+      "id": "preset_otp_universal_01",
+      "name": "Penerus Kode OTP Otomatis",
+      "enabled": true,
+      "package_name": "*",
+      "regex_pattern": "(?:OTP|kode|code|verifikasi|verification)[^0-9]{0,25}([0-9]{4,8})",
+      "regex_ignore_case": true,
+      "webhook_url": "https://httpbin.org/post",
+      "http_method": "POST",
+      "custom_payload": "",
+      "send_only_if_matched": true,
+      "secret_key": "",
+      "max_retries": 3,
+      "ignore_group_summary": true,
+      "deduplicate_messages": true,
+      "ignore_ongoing": true,
+      "cooldown_seconds": 0
+    }
+  ],
+  "blacklists": []
+}'''
+    },
+  ];
 
   @override
   void initState() {
@@ -76,16 +181,116 @@ class _RulesScreenState extends State<RulesScreen> {
 
   Future<void> _exportRules() async {
     final i18n = I18n.of(context);
-    final jsonStr = await _bridge.exportDatabaseJson();
-    await Clipboard.setData(ClipboardData(text: jsonStr));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.teal.shade800,
-          content: Text(i18n.copiedToClipboard),
-        ),
-      );
-    }
+    final rawDbJson = await _bridge.exportDatabaseJson();
+    final blacklists = await _bridge.getAllBlacklist();
+    final fileNameController = TextEditingController(text: 'notifymee_package_config.json');
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final safeName = fileNameController.text.trim().isEmpty
+              ? 'notifymee_package_config.json'
+              : (fileNameController.text.trim().endsWith('.json')
+                  ? fileNameController.text.trim()
+                  : '${fileNameController.text.trim()}.json');
+
+          Map<String, dynamic> parsedDb = {};
+          try {
+            parsedDb = jsonDecode(rawDbJson) as Map<String, dynamic>;
+          } catch (_) {}
+
+          final bundle = {
+            'schema': 'notifymee_package_bundle_v2',
+            'export_name': safeName,
+            'exported_at': DateTime.now().toIso8601String(),
+            'rules': parsedDb['rules'] ?? _rules.map((r) => r.toMap()).toList(),
+            'blacklists': blacklists,
+          };
+          final prettyJson = const JsonEncoder.withIndent('  ').convert(bundle);
+
+          return AlertDialog(
+            title: Text(
+              i18n.isId ? 'Export Pengaturan Package' : 'Export Package Config',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: fileNameController,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: InputDecoration(
+                        labelText: i18n.isId ? 'Nama File Export (.json)' : 'Export File Name (.json)',
+                        hintText: 'whatsapp_config.json',
+                        prefixIcon: const Icon(Icons.insert_drive_file_outlined),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      i18n.isId
+                          ? 'Pratinjau JSON ($safeName):'
+                          : 'JSON Preview ($safeName):',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 150,
+                      width: double.maxFinite,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F2926),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          prettyJson,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 10.5,
+                            color: Color(0xFF80CBC4),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(i18n.btnCancel),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00695C)),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: prettyJson));
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: const Color(0xFF00695C),
+                        content: Text('${i18n.copiedToClipboard} ($safeName)'),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.copy, size: 16),
+                label: Text(i18n.isId ? 'Salin JSON ($safeName)' : 'Copy JSON ($safeName)'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _importRules() async {
@@ -93,40 +298,104 @@ class _RulesScreenState extends State<RulesScreen> {
     final textController = TextEditingController();
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(i18n.btnImportConfig),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                i18n.importConfigPrompt,
-                style: const TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: textController,
-                maxLines: 8,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: '{\n  "rules": [\n    ...\n  ]\n}',
-                ),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(
+            i18n.isId ? 'Import Pengaturan Package' : 'Import Package Config',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    i18n.isId
+                        ? 'Koleksi Siap Import (Folder /presets GitHub):'
+                        : 'Ready-to-Import Collection (/presets folder):',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF00695C)),
+                  ),
+                  const SizedBox(height: 6),
+                  ..._builtInPresets.map((preset) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      color: const Color(0xFFF4FAF9),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: const BorderSide(color: Color(0xFFB2DFDB)),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        title: Text(
+                          preset['title']!,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          preset['fileName']!,
+                          style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
+                        ),
+                        trailing: FilledButton.tonal(
+                          onPressed: () {
+                            setDialogState(() {
+                              textController.text = preset['json']!;
+                            });
+                          },
+                          child: Text(i18n.isId ? 'Pilih' : 'Select', style: const TextStyle(fontSize: 11)),
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 10),
+                  Text(
+                    i18n.importConfigPrompt,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: textController,
+                    maxLines: 7,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: '{\n  "schema": "notifymee_package_bundle_v2",\n  "rules": [...],\n  "blacklists": [...]\n}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(i18n.btnCancel)),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00695C)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(i18n.btnImportConfig),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(i18n.btnCancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(i18n.btnImportConfig)),
-        ],
       ),
     );
 
     if (confirm == true && textController.text.trim().isNotEmpty) {
-      final success = await _bridge.importDatabaseJson(textController.text.trim());
+      final raw = textController.text.trim();
+      final success = await _bridge.importDatabaseJson(raw);
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic> && decoded['blacklists'] is List) {
+          for (final item in (decoded['blacklists'] as List)) {
+            if (item is Map) {
+              final pkg = (item['package_name'] ?? item['packageName'] ?? '*').toString();
+              final pat = (item['pattern'] ?? '').toString();
+              if (pat.isNotEmpty) {
+                await _bridge.addPackageBlacklist(pkg, pat);
+              }
+            }
+          }
+        }
+      } catch (_) {}
       if (!mounted) return;
       if (success) {
         await _loadRules();

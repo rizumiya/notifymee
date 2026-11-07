@@ -1,15 +1,14 @@
 package com.rizumiya.notifymee
 
 import android.content.Context
-import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 object NotificationLogStore {
 
-    @Synchronized
     fun addLog(
         context: Context,
         logItem: JSONObject,
@@ -18,12 +17,12 @@ object NotificationLogStore {
         isGroupSummary: Boolean = false
     ) {
         try {
-            val db = AppDatabase.getInstance(context)
+            val db = AppDatabase.getInstance(context.applicationContext)
             val key = notificationKey.ifBlank {
                 logItem.optString("packageName") + "|" + logItem.optString("title") + "|" + logItem.optString("text")
             }
             db.insertOrUpdateLog(
-                id = logItem.optString("id", System.currentTimeMillis().toString()),
+                id = logItem.optString("id").ifBlank { "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}" },
                 notificationKey = key,
                 timestamp = logItem.optLong("timestamp", System.currentTimeMillis()),
                 datetime = logItem.optString("datetime", ""),
@@ -46,18 +45,16 @@ object NotificationLogStore {
         }
     }
 
-    @Synchronized
     fun getLogsJson(context: Context): String {
-        return AppDatabase.getInstance(context).getLogsJson(250)
+        return AppDatabase.getInstance(context.applicationContext).getLogsJson(250)
     }
 
-    @Synchronized
     fun clearLogs(context: Context) {
-        AppDatabase.getInstance(context).clearLogs()
+        AppDatabase.getInstance(context.applicationContext).clearLogs()
     }
 
     fun createLogEntry(
-        id: String = System.currentTimeMillis().toString(),
+        id: String = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}",
         timestamp: Long = System.currentTimeMillis(),
         packageName: String,
         title: String,
@@ -90,4 +87,3 @@ object NotificationLogStore {
         return obj
     }
 }
-
